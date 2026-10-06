@@ -1,0 +1,13 @@
+**/node_modules/
+**/.expo/
+**/dist/
+**/bin/
+**/obj/
+**/.env
+**/.env.local
+**/appsettings.Local.json
+**/storage/
+*.user
+*.log
+artifacts/
+**/review-data/
