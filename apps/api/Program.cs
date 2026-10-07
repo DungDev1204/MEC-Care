@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;
 
 var builder = WebApplication.CreateBuilder(args);
+if (args.Contains("--create-push-keys")) { WebPushSettings.CreateKeys(builder.Environment.ContentRootPath); return; }
 builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true);
 if (builder.Environment.IsDevelopment()) builder.Configuration.AddUserSecrets<Program>(optional: true);
 builder.Configuration.AddEnvironmentVariables();
@@ -32,12 +33,11 @@ builder.Services.ConfigureHttpJsonOptions(o => {
 builder.Services.AddRateLimiter(o => o.AddPolicy("login", ctx => RateLimitPartition.GetFixedWindowLimiter(
     ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions {
         PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })));
-builder.Services.AddHttpClient("expo", c => {
-    c.BaseAddress = new Uri("https://exp.host/--/api/v2/push/"); c.Timeout = TimeSpan.FromSeconds(20);
-    var accessToken = builder.Configuration["Push:AccessToken"];
-    if (!string.IsNullOrWhiteSpace(accessToken)) c.DefaultRequestHeaders.Authorization = new("Bearer", accessToken);
-});
-if (!review && builder.Configuration.GetValue<bool>("Push:Enabled")) builder.Services.AddHostedService<PushWorker>();
+builder.Services.AddSingleton<IWebPushSender, WebPushSender>();
+if (!review && builder.Configuration.GetValue<bool>("Push:Enabled")) {
+    WebPushSettings.Validate(builder.Configuration);
+    builder.Services.AddHostedService<PushWorker>();
+}
 var app = builder.Build();
 if (review) {
     using var scope = app.Services.CreateScope();
@@ -51,14 +51,32 @@ if (args.Contains("--provision-user")) {
 }
 app.UseExceptionHandler();
 app.Use(async (ctx, next) => {
+    if (ctx.Request.Path.StartsWithSegments("/api") || ctx.Request.Path.StartsWithSegments("/auth"))
+        ctx.Response.Headers.CacheControl = "no-store";
+    await next(ctx);
+});
+app.Use(async (ctx, next) => {
     try { await next(ctx); }
     catch (DbUpdateConcurrencyException) { ctx.Response.StatusCode = 409; await ctx.Response.WriteAsJsonAsync(new { message = "Dữ liệu đã thay đổi ở thiết bị khác. Tải lại để xem trạng thái mới." }); }
 });
 if (!app.Environment.IsDevelopment()) app.UseHttpsRedirection();
 app.UseRateLimiter();
+// Cookie-authenticated writes are same-origin only. JSON APIs also reject form posts.
+app.Use(async (ctx, next) => {
+    if (ctx.Request.Method is not ("GET" or "HEAD" or "OPTIONS") && ctx.Request.Headers.TryGetValue("Origin", out var origin)
+        && !(review && ReviewMode.BrowserOrigins().Contains(origin.ToString()))
+        && (!Uri.TryCreate(origin, UriKind.Absolute, out var uri) || uri.Authority != ctx.Request.Host.Value || uri.Scheme != ctx.Request.Scheme)) {
+        ctx.Response.StatusCode = 403; return;
+    }
+    await next(ctx);
+});
+app.UseDefaultFiles();
+app.UseStaticFiles(new StaticFileOptions { OnPrepareResponse = ctx => {
+    if (ctx.File.Name is "sw.js" or "index.html") ctx.Context.Response.Headers.CacheControl = "no-cache";
+}});
 app.Use(async (ctx, next) => await Auth.Populate(ctx, ctx.RequestServices.GetRequiredService<StudioDb>(), next));
 app.MapGet("/health", () => Results.Ok(new { status = "running", mode = review ? "review" : "sqlServer" }));
-app.MapPost("/auth/login", async (LoginInput input, StudioDb db) => {
+app.MapPost("/auth/login", async (LoginInput input, HttpContext ctx, StudioDb db) => {
     if (input.Email.Length > 254 || input.Password.Length > 256) return Results.Unauthorized();
     var user = await db.Employees.SingleOrDefaultAsync(x => x.Email == input.Email.Trim().ToLowerInvariant() && x.Enabled);
     var hasher = new PasswordHasher<Employee>();
@@ -66,34 +84,40 @@ app.MapPost("/auth/login", async (LoginInput input, StudioDb db) => {
     var result = hasher.VerifyHashedPassword(user, user.PasswordHash, input.Password);
     if (result == PasswordVerificationResult.Failed) return Results.Unauthorized();
     if (result == PasswordVerificationResult.SuccessRehashNeeded) user.PasswordHash = hasher.HashPassword(user, input.Password);
-    if (input.PushToken is not null) {
-        var device = await db.Devices.SingleOrDefaultAsync(d => d.PushToken == input.PushToken);
-        if (device is not null) { device.OwnerId = user.Id; device.Enabled = false; }
+    var previousHash = Auth.Hash(Auth.Token(ctx));
+    var previous = await db.Sessions.SingleOrDefaultAsync(s => s.TokenHash == previousHash);
+    if (previous is not null) {
+        foreach (var device in await db.Devices.Where(d => d.SessionId == previous.Id).ToListAsync()) device.Enabled = false;
+        previous.ExpiresAt = DateTimeOffset.UtcNow;
     }
     var token = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(48));
     var expiry = DateTimeOffset.UtcNow.AddDays(7);
     db.Sessions.Add(new LoginSession { EmployeeId = user.Id, TokenHash = Auth.Hash(token), ExpiresAt = expiry });
-    await db.SaveChangesAsync(); return Results.Ok(new { token, expiresAt = expiry, email = user.Email });
+    await db.SaveChangesAsync();
+    ctx.Response.Cookies.Append(Auth.CookieName, token, new CookieOptions { HttpOnly = true, Secure = !app.Environment.IsDevelopment(), SameSite = SameSiteMode.Strict, Expires = expiry, Path = "/" });
+    return Results.Ok(new { token, expiresAt = expiry, email = user.Email, displayName = user.DisplayName });
 }).RequireRateLimiting("login");
 var api = app.MapGroup("/api");
 api.AddEndpointFilter(async (ctx, next) => ctx.HttpContext.User.Identity?.IsAuthenticated == true
     ? await next(ctx) : Results.Unauthorized());
+api.MapGet("/session", async (HttpContext ctx, StudioDb db) => Results.Ok(await db.Employees.AsNoTracking().Where(e => e.Id == ctx.Owner()).Select(e => new { e.Email, e.DisplayName }).SingleAsync()));
 api.MapPost("/logout", async (HttpContext ctx, StudioDb db) => {
-    var hash = Auth.Hash(ctx.Request.Headers.Authorization.ToString()[7..]);
-    await db.Sessions.Where(s => s.TokenHash == hash).ExecuteDeleteAsync(); return Results.NoContent();
-});
-api.MapPost("/devices", async (DeviceInput input, HttpContext ctx, StudioDb db) => {
-    if (!(input.PushToken.StartsWith("ExponentPushToken[") || input.PushToken.StartsWith("ExpoPushToken[")) || input.PushToken.Length > 300)
-        return Results.BadRequest(new { message = "Token thông báo không hợp lệ." });
-    var device = await db.Devices.SingleOrDefaultAsync(x => x.PushToken == input.PushToken);
-    if (device is null) db.Devices.Add(new Device { OwnerId = ctx.Owner(), PushToken = input.PushToken });
-    else { device.OwnerId = ctx.Owner(); device.Enabled = true; }
-    await db.SaveChangesAsync(); return Results.NoContent();
-});
-api.MapPost("/devices/unregister", async (DeviceInput input, HttpContext ctx, StudioDb db) => {
-    await db.Devices.Where(d => d.OwnerId == ctx.Owner() && d.PushToken == input.PushToken).ExecuteUpdateAsync(s => s.SetProperty(d => d.Enabled, false));
+    var hash = Auth.Hash(Auth.Token(ctx));
+    var session = await db.Sessions.SingleAsync(s => s.TokenHash == hash);
+    foreach (var device in await db.Devices.Where(d => d.SessionId == session.Id).ToListAsync()) device.Enabled = false;
+    session.ExpiresAt = DateTimeOffset.UtcNow;
+    await db.SaveChangesAsync();
+    ctx.Response.Cookies.Delete(Auth.CookieName, new CookieOptions { Path = "/", Secure = !app.Environment.IsDevelopment(), SameSite = SameSiteMode.Strict });
     return Results.NoContent();
 });
+WebPushEndpoints.Map(api);
+AccountEndpoints.Map(api);
 CustomerEndpoints.Map(api); CareEndpoints.Map(api);
+app.MapFallback(async ctx => {
+    var index = Path.Combine(app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot"), "index.html");
+    if (ctx.Request.Path.StartsWithSegments("/api") || ctx.Request.Path.StartsWithSegments("/auth") || !File.Exists(index)) { ctx.Response.StatusCode = 404; return; }
+    ctx.Response.ContentType = "text/html; charset=utf-8"; ctx.Response.Headers.CacheControl = "no-cache";
+    await ctx.Response.SendFileAsync(index);
+});
 app.Run();
 public partial class Program;

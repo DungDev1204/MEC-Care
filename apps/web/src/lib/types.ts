@@ -1,0 +1,13 @@
+export type Vehicle = { id?: string; model: string; plate: string; deliveryDate: string | null };
+export type Customer = { id: string; name: string; phone: string; birthDate?: string | null; interests?: string; notes?: string; preferredContact?: string; status: string; avatarId: string | null; vehicles: Vehicle[]; lastContactAt?: string | null; updatedAt: string };
+export type CustomerInput = { name: string; phone: string; birthDate: string | null; interests: string; notes: string; preferredContact: string; status: string; vehicles: Vehicle[]; confirmDuplicate?: boolean };
+export type Photo = { id: string; caption: string; createdAt: string };
+export type Reminder = { id: string; customerId: string; kind: string; content: string; localDateTime: string; timeZone: string; repeat: string; leadDays: number; leapDayPolicy: string | null; active: boolean };
+export type ReminderInput = Omit<Reminder, 'id' | 'customerId' | 'active'>;
+export type Occurrence = { id: string; reminderId: string; scheduledAt: string; notifyAt: string; state: string };
+export type ReminderRow = { reminder: Reminder; occurrences: Occurrence[] };
+export type Contact = { id: string; at: string; channel: string; content: string };
+export type AgendaItem = { occurrence: Occurrence; reminder: Reminder; customerId: string; customerName: string; phone: string; avatarId: string | null };
+export const statuses: Record<string, string> = { new: 'Mới tiếp nhận', consulting: 'Đang tư vấn', purchased: 'Đã mua xe' };
+export const kinds: Record<string, string> = { birthday: 'Sinh nhật', afterPurchase: 'Chăm sóc sau mua', maintenance: 'Bảo dưỡng', delivery: 'Kỷ niệm giao xe', consulting: 'Tư vấn trước mua', other: 'Dịp khác' };
+export const channels: Record<string, string> = { call: 'Gọi điện', message: 'Nhắn tin', meeting: 'Gặp trực tiếp' };

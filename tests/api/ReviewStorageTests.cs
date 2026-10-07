@@ -27,7 +27,8 @@ public class ReviewStorageTests(SqliteStudioFactory factory) : IClassFixture<Sql
         var token = session.RootElement.GetProperty("token").GetString();
         first.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         var customers = (await first.GetFromJsonAsync<List<Customer>>("/api/customers"))!;
-        var customer = Assert.Single(customers);
+        var customer = Assert.Single(customers, c => c.Name == "Nguyễn Minh Anh · Mẫu");
+        Assert.Equal(6, customers.Count);
         Assert.Contains("Mẫu", customer.Name);
         var contact = await first.PostAsJsonAsync($"/api/customers/{customer.Id}/contacts", new ContactInput(DateTimeOffset.UtcNow, "call", "Kiểm thử SQLite", null, null));
         contact.EnsureSuccessStatusCode();

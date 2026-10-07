@@ -15,7 +15,7 @@ public static class CustomerEndpoints
             var ids = customers.Select(x => x.Id).ToList();
             var latest = await db.Contacts.Where(x => ids.Contains(x.CustomerId)).GroupBy(x => x.CustomerId)
                 .Select(x => new { Id = x.Key, At = x.Max(c => c.At) }).ToDictionaryAsync(x => x.Id, x => x.At);
-            return Results.Ok(customers.Select(c => new { c.Id, c.Name, c.Phone, c.Status, c.AvatarId, c.Vehicles,
+            return Results.Ok(customers.Select(c => new { c.Id, c.Name, c.Phone, c.Status, c.AvatarId, c.Vehicles, c.UpdatedAt,
                 lastContactAt = latest.TryGetValue(c.Id, out var at) ? (DateTimeOffset?)at : null }));
         });
         api.MapGet("/customers/{id:guid}", async (Guid id, HttpContext ctx, StudioDb db) => {

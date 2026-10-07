@@ -9,6 +9,8 @@ public sealed class Employee
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Email { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public string Phone { get; set; } = "";
     public string PasswordHash { get; set; } = "";
     public bool Enabled { get; set; } = true;
 }
@@ -93,6 +95,10 @@ public sealed class Device
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid OwnerId { get; set; }
     public string PushToken { get; set; } = "";
+    public string? Endpoint { get; set; }
+    public string? P256dh { get; set; }
+    public string? AuthKey { get; set; }
+    public Guid? SessionId { get; set; }
     public bool Enabled { get; set; } = true;
 }
 public sealed class Delivery
@@ -121,6 +127,8 @@ public sealed class StudioDb(DbContextOptions<StudioDb> options) : DbContext(opt
     protected override void OnModelCreating(ModelBuilder b)
     {
         b.Entity<Employee>().Property(x => x.Email).HasMaxLength(254);
+        b.Entity<Employee>().Property(x => x.DisplayName).HasMaxLength(200);
+        b.Entity<Employee>().Property(x => x.Phone).HasMaxLength(32);
         b.Entity<Employee>().HasIndex(x => x.Email).IsUnique();
         b.Entity<LoginSession>().Property(x => x.TokenHash).HasMaxLength(64);
         b.Entity<LoginSession>().HasIndex(x => x.TokenHash).IsUnique();
@@ -143,6 +151,10 @@ public sealed class StudioDb(DbContextOptions<StudioDb> options) : DbContext(opt
         else b.Entity<Occurrence>().Property(x => x.RowVersion).IsRowVersion();
         b.Entity<Device>().Property(x => x.PushToken).HasMaxLength(300);
         b.Entity<Device>().HasIndex(x => x.PushToken).IsUnique();
+        b.Entity<Device>().Property(x => x.Endpoint).HasMaxLength(2048);
+        b.Entity<Device>().Property(x => x.P256dh).HasMaxLength(128);
+        b.Entity<Device>().Property(x => x.AuthKey).HasMaxLength(64);
+        b.Entity<Device>().HasOne<LoginSession>().WithMany().HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<Delivery>().HasIndex(x => new { x.OccurrenceId, x.DeviceId }).IsUnique();
         b.Entity<Delivery>().HasOne<Occurrence>().WithMany().HasForeignKey(x => x.OccurrenceId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<Delivery>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);

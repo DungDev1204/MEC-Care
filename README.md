@@ -1,147 +1,78 @@
-# Clienté
+# Clienté · Web app / PWA
 
-**Review ngay, chưa cần SQL:** xem [hướng dẫn chạy bản Review](docs/review.md). Chế độ riêng này dùng SQLite cục bộ và hai tài khoản mẫu, tắt thông báo thật; chạy bằng profile `review`.
+Không gian quản lý và chăm sóc khách hàng xe sang, dùng trên máy tính, iPhone và Samsung. **Ngày 07/10/2026, dự án chuyển hoàn toàn từ mobile Expo sang web/PWA.** Mã mobile và script build native đã được gỡ; backend nghiệp vụ, SQL và kho ảnh được giữ lại. Dependency mobile cũ không còn dùng nằm trong `artifacts/mobile-dependencies-legacy/` (không đưa vào Git).
 
-Ứng dụng chăm sóc khách hàng xe sang cho **iPhone và Android**. Sau đăng nhập mở trực tiếp danh sách khách. Mỗi nhân viên có dữ liệu riêng và có thể dùng cùng tài khoản trên nhiều điện thoại.
+Sau đăng nhập mở thẳng **danh sách khách hàng**. Thiết kế mới dùng trắng ngà, xanh trầm, chữ serif cho tiêu đề và Be Vietnam Pro cho nội dung; font được đóng gói tại chỗ. Desktop có thanh điều hướng và lịch cạnh danh sách, điện thoại có điều hướng dưới màn hình.
 
-## Công nghệ đã chọn
+## Tính năng
 
-- App cài trên điện thoại: React Native, Expo SDK 57, TypeScript và Expo Router.
-- API: ASP.NET Core / .NET 10 LTS, Entity Framework Core.
-- Cơ sở dữ liệu: SQL Server 2022 trên máy chủ công ty, đã kiểm tra đăng nhập thành công. **SSMS 19 là công cụ quản lý.** EF Core 10 dùng SQL Server 2019 trở lên theo tài liệu hiện hành.
-- Ảnh: file trên ổ lưu trữ bền vững của máy chủ; SQL lưu ID, mô tả và tham chiếu. Ảnh chỉ được tải qua API có kiểm tra chủ sở hữu.
-- Thông báo: máy chủ xử lý lịch, lưu công việc gửi trong SQL và gọi Expo Push Service → APNs cho iPhone / FCM cho Android. Không cần trang web đang mở để chạy lịch.
+- Tìm tên không dấu, điện thoại, dòng xe, biển số; lọc trạng thái, sắp xếp A–Z / cập nhật / lâu chưa liên hệ; xem danh sách hoặc thẻ.
+- Thêm/sửa hồ sơ, nhiều xe, ngày sinh và tuổi, sở thích, ghi chú; xác nhận riêng khi trùng điện thoại.
+- Hồ sơ bốn mục: thông tin, hình ảnh, chăm sóc, lịch nhắc. Gọi / nhắn tin bằng ứng dụng của thiết bị.
+- Avatar riêng, album nhiều ảnh, nén JPEG trước khi tải; ảnh được đọc qua API kiểm tra chủ sở hữu; xem lớn, sửa mô tả, xóa có xác nhận.
+- Ghi nhận kênh, thời điểm thực tế và kết quả chăm sóc; đặt lần tiếp theo trong cùng thao tác. Mở từ lời nhắc có thể đồng thời hoàn thành đúng lần đó.
+- Lịch chăm sóc chung có bộ lọc hôm nay, 7 ngày tới, quá hạn; thêm/sửa/hủy lịch, dời và hoàn thành từng lần. Lặp hằng năm, nhắc trước 1/3 ngày, quy tắc 29/02.
+- PWA có manifest, icon, Service Worker, hướng dẫn cài vào màn hình chính, đăng ký Web Push theo thiết bị và link thông báo đến đúng hồ sơ.
+- Hướng dẫn cài đặt trong Cài đặt có hai tab iPhone/Safari và Android/Samsung/Chrome, bốn bước có hình vector đánh dấu vị trí cần bấm, mẹo khi không thấy mục cài và hướng dẫn bật lời nhắc sau cài.
+- Bấm avatar mở menu Thông tin cá nhân / Cài đặt / Cài đặt nâng cao / Đăng xuất trên desktop và điện thoại. Sửa tên hiển thị, điện thoại; cài thông báo và PWA ở trang riêng.
+- Cài đặt nâng cao tải ZIP dữ liệu của tài khoản hiện tại: hồ sơ, xe, chăm sóc, lịch nhắc và tùy chọn kèm ảnh đã lưu. ZIP có `data.json` và ảnh kèm checksum; không chứa mật khẩu hoặc phiên đăng nhập. Đây là bản xuất cá nhân; phục hồi và sao lưu toàn bộ SQL + kho ảnh vẫn do quản trị vận hành.
+- Cookie phiên HttpOnly / SameSite Strict, Secure trong production; dữ liệu riêng từng nhân viên. Đăng xuất ngừng thông báo của phiên đó. Không lưu token hay hồ sơ vào localStorage.
+- Trạng thái tải, rỗng, lỗi, lưu, ngoại tuyến; form giữ nội dung khi lỗi mạng, cảnh báo bỏ thay đổi, hỗ trợ bàn phím và giảm chuyển động.
 
-Sơ đồ kết nối: `iPhone / Android → API HTTPS → SQL Server + kho ảnh`.
+## Xem ngay trên máy này
 
-API và app tách biệt; model xe tách khỏi khách, lịch lặp tách khỏi lần nhắc. MVP là một API có các module riêng, một tiến trình xử lý thông báo, thuận tiện mở rộng mà chưa cần microservices.
+Yêu cầu .NET 10 SDK và Node 22.12+ / 24 LTS tương thích Vite. Dữ liệu Review dùng SQLite riêng; thông báo thật tắt.
 
-## Mã đã có
-
-- Đăng nhập bằng tài khoản nhân viên, phiên lưu trong SecureStore; kiểm tra chủ sở hữu ở phía API.
-- Danh sách khách, tìm tên không dấu / điện thoại / biển số, thêm và sửa, xác nhận trùng điện thoại.
-- Hồ sơ 4 tab: thông tin, hình ảnh, chăm sóc và lịch nhắc; tuổi tính từ ngày sinh.
-- Avatar riêng với album, chọn nhiều ảnh, nén và chuyển JPEG trên điện thoại, xem lớn / mô tả / xóa có xác nhận.
-- Lịch sử chăm sóc, thời gian và kênh thực tế, hẹn lần tiếp theo; hoàn thành đúng lần nhắc nếu mở từ lịch.
-- Thêm / sửa / hủy lịch, dời một lần, hoàn thành một lần; lịch hằng năm vẫn giữ các lần sau.
-- Quy tắc 29/02 bắt buộc chọn 28/02 hoặc 01/03 trong năm không nhuận.
-- Đăng ký điện thoại nhận push, mở đúng khách và lịch khi chạm thông báo; worker có retry, kiểm tra receipt, vô hiệu hóa token không còn đăng ký.
-- EF migrations và [script SQL](docs/database.sql) cho database mới của app.
-
-**Đây là mã nguồn bản đầu, chưa phải bản cài đã được nghiệm thu trên điện thoại.** Đã xác thực kết nối SQL công ty và đọc phiên bản; chưa có database `ClientStudio` và chưa chạy migrations. Chưa có cấu hình Apple / Firebase / Expo hoặc API HTTPS thật. Không có dữ liệu khách mẫu trộn với dữ liệu thật.
-
-## Chạy API
-
-Yêu cầu .NET 10 SDK. Từ thư mục gốc:
+Terminal 1, tại thư mục gốc:
 
 ```powershell
-dotnet tool restore
-if (-not (Test-Path apps/api/appsettings.Local.json)) {
-    Copy-Item apps/api/appsettings.Local.example.json apps/api/appsettings.Local.json
-}
+dotnet run --project apps/api --launch-profile review
 ```
 
-Nếu đã có `apps/api/appsettings.Local.json` được cấu hình, không chép đè file đó bằng mẫu. Sửa cấu hình cục bộ với tên máy chủ SQL và thư mục ảnh. Có thể dùng Windows Authentication nếu tài khoản chạy API được cấp quyền vào database. Nếu dùng SQL Authentication, giữ connection string trong cấu hình cục bộ, secret hoặc biến môi trường `ConnectionStrings__SqlServer`; không ghi mật khẩu vào git. Cấu hình cục bộ bị loại khỏi output/publish; khi triển khai phải cấp secret tại máy chủ. Dùng database riêng `ClientStudio`.
-
-Máy chủ hiện có chứng chỉ chưa được máy phát triển tin cậy. `appsettings.Development.json` bật `SqlServer:TrustServerCertificateInDevelopment` để kiểm thử kết nối có mã hóa trong Development. Tùy chọn bị bỏ qua ở môi trường khác; khi triển khai cần chứng chỉ SQL hợp lệ/được tin cậy.
-
-Kiểm tra chỉ đọc từ thư mục gốc, không thay đổi SQL:
+Terminal 2:
 
 ```powershell
-dotnet run --project tools/sql-probe -- --trust-server-certificate
+.\scripts\start-review-web.ps1
 ```
 
-Chỉ khi đã chọn đúng database của app và có quyền tạo bảng, thực hiện:
+Mở **http://localhost:8081**. Nút **Điền tài khoản thử** có trong màn hình đăng nhập Review. Tài khoản `review@clientstudio.local` / `Review123!` có sáu hồ sơ hư cấu ban đầu. Tài khoản `review2@clientstudio.local` cùng mật khẩu có dữ liệu riêng. Các thao tác thử được lưu bền vững trong `apps/api/review-data/`; không trộn với SQL công ty. Chi tiết: [Review](docs/review.md), [điện thoại](docs/review-phone.md).
+
+## Build và triển khai cùng API
 
 ```powershell
-dotnet ef database update --project apps/api
+.\scripts\build-web.ps1
+dotnet publish apps/api -c Release -o artifacts/web-app
 ```
 
-Hoặc IT xem và chạy script `docs/database.sql` trong database dành riêng cho app. Script tạo các bảng app, không phải script chuyển đổi hệ thống CRM có sẵn. Chưa có lệnh nào được chạy trên SQL Server công ty trong quá trình xây mã.
+Script build tạo frontend trong `apps/api/wwwroot`; ASP.NET phục vụ cả web và API trên cùng domain. Bản Review cũng có thể mở ở **http://localhost:5180** sau khi build rồi khởi động lại API. Build/publish không triển khai lên máy chủ công ty và không chạy migrations trên SQL.
 
-Tạo từng tài khoản nhân viên trên máy chạy API:
+Production: dùng SQL Server 2019+ (server đã kiểm tra là SQL Server 2022), database riêng `ClientStudio`, HTTPS, thư mục ảnh bền vững và tài khoản service có quyền cần thiết. Cấp connection string qua secret hoặc `ConnectionStrings__SqlServer`; không đưa secret vào Git. `appsettings.Local.json`, Review data, `wwwroot` sinh từ build và artifacts bị ignore. File cấu hình Local không được publish: phải cấp cấu hình ở máy chủ.
+
+IT xem [script SQL idempotent](docs/database.sql) hoặc chạy `dotnet ef database update --project apps/api` **sau khi chọn đúng database**. Migration `WebPushSubscriptions` bổ sung metadata đăng ký web; `EmployeePersonalInfo` thêm tên hiển thị và điện thoại nhân viên; không xóa hồ sơ. Cần áp dụng các migration này trước khi chạy bản API mới trên SQL. Tạo tài khoản nhân viên bằng `dotnet run --project apps/api -- --provision-user`.
+
+## Web Push thật
 
 ```powershell
-dotnet run --project apps/api -- --provision-user
+dotnet run --project apps/api -- --create-push-keys
 ```
 
-Lệnh hỏi email và mật khẩu tối thiểu 12 ký tự, không hiển thị mật khẩu. Không có đăng ký công khai. Phiên đăng nhập có hiệu lực 7 ngày. Có thể vô hiệu hóa nhân viên bằng trường `Employees.Enabled` trong database; cần quy trình quản trị tài khoản khi đưa vào sử dụng thật.
+Lệnh tạo cặp VAPID vào file Local bị ignore, không in private key; giữ nguyên khóa đã có. Đặt `Push:Subject` thành email vận hành dạng `mailto:...`, cấp PublicKey / PrivateKey qua secret ở máy chủ rồi bật `Push:Enabled=true`. Không đổi cặp khóa sau khi người dùng đăng ký nếu chưa có kế hoạch đăng ký lại.
 
-```powershell
-dotnet run --project apps/api
-dotnet publish apps/api -c Release -o artifacts/api
-```
+Không còn Expo, APNs signing, Firebase project hoặc bản IPA/APK. Chrome/Samsung Internet và Safari PWA dùng Web Push tiêu chuẩn. iPhone cần iOS 16.4+, Safari → Thêm vào Màn hình chính → mở từ biểu tượng → Bật thông báo. Samsung dùng Chrome hoặc Samsung Internet qua HTTPS, cấp quyền thông báo. `/api/push/config` chỉ trả public key và trạng thái.
 
-`/health` kiểm tra tiến trình API; không xác nhận rằng SQL và thông báo đang hoạt động. Chưa triển khai hoặc mở cổng trên máy chủ công ty.
+Worker xử lý mỗi 15 giây, lưu công việc và retry trong SQL, vô hiệu đăng ký bị dịch vụ trả 404/410. Chạy **một worker** trong giai đoạn hiện tại. Thông báo màn hình khóa dùng nội dung chung; bấm vào mới mở hồ sơ có đăng nhập. Phiên có hiệu lực 7 ngày: đăng nhập lại sau khi hết hạn và kiểm tra đăng ký trong Tài khoản. Khi đăng xuất hoặc phiên hết hạn, thiết bị của phiên không còn nhận push. HTTP qua IP LAN chỉ để review giao diện, không dùng kiểm thử PWA/push.
 
-## Chạy app và tạo bản cài
-
-Yêu cầu Node.js 22 LTS trở lên tương thích SDK. Môi trường xây mã hiện dùng Node 25; kiểm tra lại với bản LTS của môi trường build khi triển khai.
-
-```powershell
-cd apps/mobile
-npm ci
-Copy-Item .env.example .env
-```
-
-Điền `EXPO_PUBLIC_API_URL` bằng địa chỉ API HTTPS mà điện thoại truy cập được. Không dùng `localhost` trên điện thoại để chỉ máy chủ công ty. Biến `EXPO_PUBLIC_*` là dữ liệu công khai trong bản cài, chỉ chứa URL và ID dự án, không chứa mật khẩu SQL hay khóa bí mật.
-
-```powershell
-npx expo start --dev-client
-```
-
-Native project được sinh từ config; không sửa thủ công thư mục `ios/` / `android/`. Dùng development build để kiểm tra đầy đủ, không lấy Expo Go làm bằng chứng nghiệm thu push.
-
-Để build trên Windows cho iPhone, có thể dùng EAS Build chạy trên máy macOS của dịch vụ. Cần tài khoản Expo và cấu hình ký Apple; không tự mua dịch vụ hoặc gửi bản build lên cloud trong lần xây mã này.
-
-```powershell
-npx eas-cli@latest login
-npx eas-cli@latest init
-npx eas-cli@latest build --profile development --platform ios
-npx eas-cli@latest build --profile development --platform android
-```
-
-Đăng ký iPhone thử nghiệm trước khi build nội bộ. SDK 57 hướng tới iOS 16.4+; xác nhận phiên bản hệ điều hành của iPhone thực tế. Bundle ID tạm `vn.clientstudio.care` cần kiểm tra và đổi theo định danh công ty trước khi tạo credentials.
-
-## Cấu hình và giới hạn thông báo
-
-1. Có Expo project ID (`eas init` hoặc `EXPO_PUBLIC_EAS_PROJECT_ID`).
-2. Cấu hình APNs / tài khoản Apple Developer cho iOS, FCM v1 / Firebase cho Android theo tài liệu Expo.
-3. API được phép kết nối outbound HTTPS đến Expo. Bật `Push:Enabled=true` chỉ sau khi database và credentials đã sẵn sàng. Nếu bật bảo vệ push token trên Expo, đặt secret `Push:AccessToken` ở máy chủ.
-4. Chạy **một** worker/API instance với `Push:Enabled=true`; các API instance khác tắt worker. Trước khi chạy nhiều worker cần phối hợp phần tạo occurrence / delivery và kiểm thử tranh chấp trên SQL thật.
-5. Nhân viên vào Tài khoản → Bật thông báo. Từ chối quyền vẫn cho lưu lịch. Mỗi thiết bị đăng ký riêng; dùng cùng tài khoản trên nhiều máy sẽ nhận trên các máy đã bật thông báo.
-
-Worker kiểm tra lịch mỗi 15 giây, có retry hữu hạn và trạng thái gửi lưu trong SQL. Receipt xác nhận phía dịch vụ nhận, không phải bằng chứng người dùng đã thấy thông báo. Push cần mạng, máy chủ đang hoạt động và quyền thông báo; Tập trung / Không làm phiền, trạng thái ứng dụng và chính sách tiết kiệm pin có thể ảnh hưởng. Không hứa nhắc tuyệt đối chính xác mọi tình huống.
-
-Sửa/hủy lịch ngăn các công việc chưa gửi theo trạng thái mới. Thông báo đã được chuyển sang APNs/FCM hoặc đã hiển thị không thể thu hồi chắc chắn từ máy chủ; có thể có giao nhau nếu sửa đúng lúc đang gửi. Nếu tiến trình bị ngắt sau khi dịch vụ nhận nhưng trước khi ghi trạng thái SQL, retry có thể tạo thông báo trùng. Cần kiểm thử các tình huống này trên thiết bị mục tiêu.
-
-App hiện cần mạng để đọc và lưu dữ liệu; dữ liệu lưu bền vững trên server. Chưa có hàng đợi ghi offline. Lịch nhắc vẫn được xử lý ở server khi app không mở.
+Push cần mạng, quyền thông báo và server hoạt động; Không làm phiền / tiết kiệm pin có thể ảnh hưởng thời điểm hiển thị. Provider chấp nhận thông báo không chứng minh điện thoại đã hiển thị. Chưa xác nhận push thật của **bản web mới này** trên iPhone/Samsung. Cần cấu hình domain, SQL và thử khóa máy / đóng app / bấm thông báo trước khi nghiệm thu.
 
 ## Kiểm tra
 
 ```powershell
 dotnet test ClientStudio.sln
-cd apps/mobile
-npm run typecheck
-npm run lint
-npx expo-doctor
-npx expo export --platform ios --platform android
+cd apps/web
+npm test
+npm run build
 ```
 
-Kiểm tra API dùng **EF InMemory chỉ trong test**, không thay thế lưu dữ liệu thật. Cần chạy migrations và các luồng CRUD / ảnh / worker trên SQL Server công ty trước nghiệm thu. Export là kiểm tra đóng gói JavaScript/Hermes cho hai nền tảng, không phải file IPA/APK đã ký.
+Chạy test .NET khi tiến trình API dùng cùng output đã dừng, hoặc dùng `dotnet test -c Release` nếu đang preview Debug. Test dùng InMemory và SQLite riêng, không truy cập SQL công ty. Xem [kết quả và giới hạn kiểm tra](docs/verification.md), [kiến trúc](docs/architecture.md).
 
-Trước bàn giao sử dụng thật: kiểm tra trên iPhone và Samsung, thông báo khi khóa máy / nền / đóng app, chạm mở đúng lịch, từ chối quyền, sửa / hủy / dời lịch, đổi tài khoản trên cùng điện thoại, đóng mở app và khôi phục dữ liệu từ backup.
-
-Sao lưu SQL **và** thư mục ảnh, kiểm tra khôi phục cùng nhau. Không dùng thư mục tạm của container cho ảnh. Giới hạn ảnh server là 10 MB / file, nhận JPEG / PNG / WebP; client chuyển ảnh chọn thành JPEG tối đa cạnh 1800 px. Khi chạy thật cần cấu hình giới hạn upload tương ứng ở reverse proxy và kiểm tra dung lượng ảnh.
-
-Xem [tình trạng kiểm tra và các việc còn thiếu](docs/verification.md), bao gồm các cảnh báo dependency còn phải xử lý trước production.
-
-## Tham khảo
-
-- [Đặc tả gốc](Yeu_cau_app_quan_ly_khach_hang_xe_sang_Codex.md)
-- [Expo SDK 57](https://docs.expo.dev/versions/v57.0.0/)
-- [Expo Push setup](https://docs.expo.dev/push-notifications/push-notifications-setup/)
-- [Expo Push reliability / receipts](https://docs.expo.dev/push-notifications/sending-notifications/)
-- [Microsoft SQL Server provider](https://learn.microsoft.com/ef/core/providers/sql-server/)
-- [.NET support](https://dotnet.microsoft.com/en-us/platform/support/policy/dotnet-core)
-- [Travel Mobile App](https://dribbble.com/shots/24911825-Travel-Mobile-App): đọc được mô tả đen–trắng tối giản; chưa xem được ảnh thiết kế gốc qua công cụ. UI triển khai theo mô tả đặc tả, không khẳng định sao chép chính xác mẫu.
+Tham khảo triển khai: [Samsung Web Push](https://developer.samsung.com/browser/android/web-developer-guide.html), [Apple Web Push](https://developer.apple.com/documentation/usernotifications/sending-web-push-notifications-in-web-apps-and-browsers), [Lib.Net.Http.WebPush](https://github.com/tpeczek/Lib.Net.Http.WebPush).

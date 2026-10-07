@@ -363,3 +363,93 @@ END;
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261007081649_WebPushSubscriptions'
+)
+BEGIN
+    ALTER TABLE [Devices] ADD [AuthKey] nvarchar(64) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261007081649_WebPushSubscriptions'
+)
+BEGIN
+    ALTER TABLE [Devices] ADD [Endpoint] nvarchar(2048) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261007081649_WebPushSubscriptions'
+)
+BEGIN
+    ALTER TABLE [Devices] ADD [P256dh] nvarchar(128) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261007081649_WebPushSubscriptions'
+)
+BEGIN
+    ALTER TABLE [Devices] ADD [SessionId] uniqueidentifier NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261007081649_WebPushSubscriptions'
+)
+BEGIN
+    CREATE INDEX [IX_Devices_SessionId] ON [Devices] ([SessionId]);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261007081649_WebPushSubscriptions'
+)
+BEGIN
+    ALTER TABLE [Devices] ADD CONSTRAINT [FK_Devices_Sessions_SessionId] FOREIGN KEY ([SessionId]) REFERENCES [Sessions] ([Id]) ON DELETE NO ACTION;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261007081649_WebPushSubscriptions'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261007081649_WebPushSubscriptions', N'10.0.12');
+END;
+
+COMMIT;
+GO
+
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261007092745_EmployeePersonalInfo'
+)
+BEGIN
+    ALTER TABLE [Employees] ADD [DisplayName] nvarchar(200) NOT NULL DEFAULT N'';
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261007092745_EmployeePersonalInfo'
+)
+BEGIN
+    ALTER TABLE [Employees] ADD [Phone] nvarchar(32) NOT NULL DEFAULT N'';
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261007092745_EmployeePersonalInfo'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261007092745_EmployeePersonalInfo', N'10.0.12');
+END;
+
+COMMIT;
+GO
+

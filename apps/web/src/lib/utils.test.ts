@@ -1,0 +1,9 @@
+import { describe, expect, it } from 'vitest';
+import { age, initials, localDateTime, normalize, safeReturn, formatTime } from './utils';
+describe('Vietnamese customer and reminder behavior', () => {
+  it('finds accented names without accents', () => { expect(normalize('Đặng Thị Ánh')).toBe('dang thi anh'); });
+  it('computes age across the birthday boundary', () => { expect(age('1990-10-07', '2026-10-06')).toBe(35); expect(age('1990-10-07', '2026-10-07')).toBe(36); expect(age(null)).toBeNull(); });
+  it('uses Vietnam time even on devices in another timezone', () => { expect(localDateTime(new Date('2026-10-06T20:30:00Z'))).toBe('2026-10-07T03:30'); expect(formatTime('2026-10-07T09:00')).toContain('09:00'); });
+  it('keeps initials meaningful in the labeled review data', () => { expect(initials('Nguyễn Minh Anh · Mẫu')).toBe('MA'); });
+  it('restores notification deep links without allowing external redirects', () => { expect(safeReturn('/customers/123?tab=reminders')).toBe('/customers/123?tab=reminders'); expect(safeReturn('//attacker.invalid')).toBe('/'); expect(safeReturn('https://attacker.invalid')).toBe('/'); expect(safeReturn('/login')).toBe('/'); });
+});

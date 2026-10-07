@@ -1,57 +1,61 @@
-# Tình trạng kiểm tra bản đầu
+# Kết quả kiểm tra — Web/PWA 07/10/2026
 
-## Thương hiệu Clienté — 06/10/2026
+- `dotnet test tests/api -c Release`: **27/27 pass**. Bao gồm quyền owner hồ sơ/ảnh/lịch, search không dấu, phone duplicate, annual/leap-day, chăm sóc + followup, SQLite bền vững, cookie HttpOnly/Secure/SameSite, logout thu hồi đăng ký, từ chối Origin khác, allowlist push, từ chối public key sai, đăng ký idempotent, lịch chung riêng từng owner, retry worker, gửi một lần, payload không lộ chi tiết khách và phiên hết hạn không gửi. Test transport thực qua HTTP handler xác nhận mã hóa `aes128gcm`, VAPID và TTL; không gửi đến vendor thật. Hai bài mới xác nhận sửa hồ sơ/session theo owner, chuẩn hóa điện thoại, dữ liệu sai/unauth; ZIP gồm đúng quan hệ và bytes ảnh/checksum, không lộ owner khác/credentials, tùy chọn bỏ ảnh và lỗi khi thiếu ảnh.
+- `npm test` trong `apps/web`: **5/5 pass**. Search tiếng Việt, tuổi, UTC+7 trên thiết bị timezone khác, initials Review, deep-link return an toàn.
+- `npm run build`: TypeScript và Vite production build thành công.
+- `scripts/build-web.ps1`: chuẩn bị frontend vào `apps/api/wwwroot` để chạy/publish cùng API.
+- `dotnet build apps/api` và `dotnet publish apps/api -c Release -o artifacts/web-app`: thành công, không cảnh báo/lỗi. Bản publish có web assets, không chứa cấu hình Local có secret.
+- Dependency web audit ở thời điểm cài: **0 vulnerabilities**. Restore .NET không báo cảnh báo vulnerability.
+- SQL migration `WebPushSubscriptions`, `EmployeePersonalInfo` và script SQL idempotent đã sinh. **Chưa thực thi trên SQL công ty**.
+- Browser QA trên Chrome local: đăng nhập, tìm không dấu, thêm khách kèm xe, chăm sóc kèm followup, hồ sơ bốn tab, dời lần nhắc bằng bàn phím, màn hình tài khoản và thông báo tắt trong Review. Bố cục điện thoại không tràn ngang ở viewport 390×844 (375px nội dung sau scrollbar). Lỗi serializer trường vehicle id được phát hiện và sửa trong QA.
+- Upload qua file chooser tự động bị Chrome extension từ chối vì chưa cấp quyền truy cập file URL. API ảnh được kiểm thử riêng; chưa xác nhận end-to-end upload/nén ảnh từ trình duyệt tự động trong phiên này.
 
-- Đổi tên hiển thị thành **Clienté** trong giao diện, cấu hình Expo, tiêu đề web, lời xin quyền chọn ảnh và hướng dẫn review. Logo **É** trắng trên nền đen dùng chung hình học vector cho giao diện và bộ icon.
-- Cập nhật icon 1024×1024, favicon, các lớp adaptive/monochrome Android và asset splash. Icon chính và nền Android không có pixel trong suốt; chữ và dấu sắc của lớp adaptive nằm trong vùng trung tâm để tránh bị cắt.
-- Nguồn hình học: `apps/mobile/assets/brand-mark.json`; chạy `scripts/generate-brand-assets.ps1` trên Windows để tái tạo PNG và SVG. Không cần cài thêm dependency để sinh ảnh.
-- TypeScript và lint đạt. Đã xem icon PNG và xác nhận tên/logo trên giao diện Review. Manifest iOS từ Metro sau khởi động lại trả đúng tên Unicode Clienté.
-- Tên database, tài khoản review và định danh bundle/package hiện có được giữ để bảo toàn dữ liệu/cấu hình. Bộ icon/tên cài đặt mới sẽ được đưa vào lần build native tiếp theo; chưa tạo bản cài đã ký trong bước này.
+## Rà UI sau phản hồi
 
-## Thiết kế lại giao diện — 06/10/2026
+- Đồng bộ ô nhập/ngày/chọn ở 46px; nút và chữ phụ có kích thước, độ tương phản thống nhất. Cửa sổ form giữ tiêu đề và nút lưu, chỉ cuộn vùng trường nhập.
+- Chrome QA ở 320×740, 390×844, tablet 820×900 và desktop 1366×900: danh sách/thẻ khách, lịch, tài khoản, hồ sơ/tab ảnh và form khách/lời nhắc. Đã sửa `body min-width` gây tràn ngang khi scrollbar chiếm chỗ trên màn hình 320px.
+- Đo DOM trên màn hình 320px sau sửa: chiều rộng nội dung bằng viewport 305px ở danh sách/thẻ, lịch và tài khoản; các dòng lịch không tràn. Form không tràn, nút lưu nằm trong viewport; ô input/select cao đều 46px trên desktop và điện thoại.
+- Bộ lọc Đã mua xe hiển thị đúng 4/7 hồ sơ thử; toolbar đổi kiểu xem/sắp xếp được gom một hàng, bộ lọc nhỏ có thể cuộn ngang. TypeScript/Vite build thành công.
+- Sau ảnh phản hồi dropdown: thay native select sắp xếp bằng combobox/listbox theo theme, hiển thị menu qua portal để không bị workspace cắt. Chrome QA xác nhận menu rộng 240px, nằm trong viewport 305px/375px ở màn hình 320px/390px; lựa chọn Cập nhật mới nhất/Lâu chưa liên hệ đổi đúng khách đầu danh sách. Mũi tên, Home/End, Enter, Escape hoạt động; Escape giữ focus ở combobox. Build/publish thành công.
 
-- Cập nhật giao diện trực tiếp trong app: màn hình đăng nhập, danh sách khách với tìm kiếm/bộ lọc trạng thái, hồ sơ bốn tab, album ảnh, timeline chăm sóc, lịch nhắc và các form. Dùng chung màu sắc, typography, icon SVG, thẻ nội dung và trạng thái chọn có nhãn trợ năng.
-- Giữ trang đầu là danh sách khách hàng. Thẻ khách thích ứng theo chiều rộng và cỡ chữ; các form chia nhóm thông tin và có vùng chạm rõ ràng.
-- TypeScript và lint đạt; Expo Doctor 21/21 đạt sau khi thêm `react-native-svg` theo phiên bản SDK. Export JavaScript/Hermes iOS và Android thành công với mã giao diện cuối cùng; đây không phải IPA/APK đã ký.
-- Kiểm tra bản Review trên trình duyệt ở chiều rộng 393 và 320 px: đăng nhập, lọc trạng thái/trạng thái rỗng, chuyển tab hồ sơ, album rỗng, timeline, mở form sửa khách, ghi nhận chăm sóc và lịch nhắc. Các ô nhập/ngày giờ của form khách và lịch nằm trong màn hình ở 320 px; trạng thái radio/tab được thể hiện qua ARIA. Xác nhận số điện thoại có sẵn hiển thị trong form sửa khách bằng ảnh chụp.
-- Chưa xác nhận toàn bộ CRUD/ảnh hoặc giao diện native trên điện thoại thật. Các thao tác kiểm tra giao diện lần này không lưu/sửa dữ liệu khách hay lịch nhắc. Không kết nối SQL Server trong lần thiết kế lại này.
-- Mở `http://localhost:8081` trong Mobile Preview rồi tải lại để review giao diện mới; hướng dẫn khởi động vẫn ở [review-phone.md](review-phone.md).
+## Menu avatar và cài đặt tài khoản
 
-## Bản Review cục bộ — 06/10/2026
+- Chrome QA desktop: avatar trên thanh trên mở đủ bốn mục; ba trang điều hướng đúng. Thông tin cá nhân có tên/điện thoại và email chỉ đọc; thông báo/PWA chuyển sang trang Cài đặt, Review vẫn tắt push thật.
+- Màn hình 390×844 và 320×740: avatar trên cùng và tài khoản dưới màn hình đều mở menu; menu nằm trong viewport. Ở 320px, nội dung rộng 305px, menu từ thanh dưới có bounds x=12..293, y=360..665; không tràn ngang. Biểu mẫu cá nhân có input rộng 223px trong card.
+- ArrowDown/ArrowUp mở và focus mục; Escape đóng, Home/End đổi mục; Tab đóng menu và tiếp tục thứ tự focus của trang. Chọn Đăng xuất mở dialog và chọn Ở lại đóng dialog, giữ phiên, focus quay về avatar.
+- Nút tải ZIP trả về blob thành công và UI hiển thị Bản sao sẵn sàng. Browser automation không nhận sự kiện download; trang nội bộ lịch sử tải xuống Chrome bị chính sách URL chặn nên không kiểm tra được tệp trong thư mục tải qua browser. API test đã mở ZIP và xác minh đầy đủ nội dung/tệp ảnh.
+- Review đang có dữ liệu cũ được nâng schema thêm trường nhân viên, không reset hồ sơ. Build mới cần migration `EmployeePersonalInfo` trước khi chạy trên SQL.
 
-- Profile `review` chạy API với SQLite riêng trong `apps/api/review-data/`, chỉ cho phép môi trường Development; tắt worker push. Không kết nối hoặc thay đổi SQL Server công ty trong bước này.
-- 12 test đạt, gồm 11 test trước và một test SQLite: tạo dữ liệu mẫu không trùng khi khởi tạo lại, đăng nhập/đọc phiên từ database, giữ dữ liệu qua các HTTP client và DbContext riêng, ghi nhận chăm sóc, hoàn thành annual với `CompletedAt` rồi giữ các năm tiếp theo, giới hạn quyền theo nhân viên và thu hồi phiên khi đăng xuất.
-- TypeScript và lint đạt. Model SQL Server không thay đổi so với migration đã có (`has-pending-model-changes --no-build`).
-- API Review khởi động thực tế, `/health` trả `mode: review`; trình duyệt đăng nhập và tải danh sách khách mẫu thành công. Đã bổ sung phần tương thích web cho ngày giờ, phiên đăng nhập, hộp thoại xác nhận và ảnh có xác thực. Chưa xác nhận toàn bộ CRUD/ảnh qua giao diện hoặc trên điện thoại thật.
-- Lần build test dùng `UseAppHost=false` khi API đang chạy có cảnh báo không xóa được exe bị khóa; build DLL và toàn bộ test vẫn thành công.
-- Xem [hướng dẫn chạy và các thao tác review](review.md). SQLite Review không thay thế kiểm thử tích hợp SQL Server hoặc kiểm thử thông báo native.
+## Đồng bộ dialog sau phản hồi
 
-Ngày: 06/10/2026. Đây là bằng chứng kiểm tra mã nguồn, chưa phải nghiệm thu sản phẩm trên thiết bị.
+- Thay toàn bộ `window.confirm` trong hồ sơ khách, ghi nhận chăm sóc, lịch nhắc và ảnh bằng `ConfirmationProvider` / `ConfirmationDialog`; đăng xuất dùng cùng component. Màu, font, bo góc, backdrop và nút theo theme web. Nút nêu hành động cụ thể, focus ban đầu ở lựa chọn giữ nội dung.
+- Modal có ID tiêu đề/mô tả riêng cho mỗi instance, alertdialog cho xác nhận, giữ focus trong dialog bằng native top layer. Bộ đếm khóa cuộn giữ trang khóa khi xác nhận đóng nhưng form bên dưới vẫn mở; đóng hết trả focus về nút mở.
+- Chrome QA đúng tình huống trong ảnh: nhập chăm sóc và chọn followup, đóng form mở xác nhận riêng của app; Tiếp tục chỉnh sửa / Escape giữ nguyên textarea và checkbox. Chỉ đổi kênh liên hệ bằng bàn phím cũng mở xác nhận, quay lại giữ kênh Nhắn tin. Bỏ thay đổi đóng cả form và xác nhận, bỏ khóa cuộn, trả focus về Ghi nhận.
+- QA hồ sơ khách và lịch nhắc: bản nháp được giữ khi quay lại, bỏ thay đổi mới đóng. Dời lịch bằng bàn phím thực bảo vệ thời điểm vừa sửa. Hoàn thành/hủy lịch hiển thị nội dung đúng; chỉ thử lựa chọn quay lại/giữ lịch, không sửa các lần nhắc trong QA. Đăng xuất/Ở lại dùng cùng giao diện và trả focus về avatar.
+- QA màn hình 320×740: dialog bounds x=17..303, y=177.8..562.2, scrollWidth bằng clientWidth 284px; nút cao 46px. Ở 390×844: bounds x=17..373, không tràn ngang. Tab chuyển tới nút Bỏ thay đổi; Escape chỉ đóng xác nhận, giữ form bên dưới.
+- TypeScript/Vite build và 5/5 test web qua. Backend không thay đổi trong lần rà dialog này. Các luồng ảnh được rà mã và dùng chung component; không thử xóa ảnh thật trong browser.
 
-Đã chạy:
+## Hướng dẫn cài đặt có hình minh họa
 
-- API biên dịch, không có cảnh báo / lỗi biên dịch.
-- 11 test API / lịch đạt: xác thực, dữ liệu nhân viên độc lập, kiểm tra quyền ảnh, hai khách trùng tên, tìm tên không dấu / biển số, trùng điện thoại cần xác nhận, hoàn thành annual giữ năm sau, lịch chăm sóc tiếp theo, dữ liệu đầu vào thiếu/null, tuổi và ranh giới sinh nhật, 29/02 và quy đổi múi giờ Việt Nam.
-- TypeScript và lint không có lỗi ở lần kiểm tra sau khi sửa.
-- Expo Doctor: 21/21 đạt.
-- Đóng gói JavaScript/Hermes cho iOS và Android thành công. Không tạo IPA/APK đã ký.
-- Sinh EF migration và script SQL idempotent; chưa chạy trên SQL công ty.
+- Trang Cài đặt luôn có nút Hướng dẫn cài đặt, kể cả khi đang mở ở chế độ ứng dụng. Khi Chrome cung cấp install prompt, Cài Clienté là nút riêng; hướng dẫn không tự mở hộp cài native. Hủy/lỗi prompt dẫn tới hướng dẫn thay vì chỉ hiện toast.
+- Dialog có tab iPhone/iOS (Safari) và Android/Samsung (Chrome), bốn bước cùng bốn hình vector mô phỏng cho mỗi tab. Tổng cộng bảy cảnh minh họa gốc, dùng chung cảnh mở biểu tượng; nút cần bấm được đánh dấu. Không dùng ảnh chụp thiết bị giả hoặc tài nguyên ảnh ngoài.
+- Nội dung được đối chiếu với [Apple](https://support.apple.com/vi-vn/guide/iphone/iphea86e5236/ios) và [Chrome](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DAndroid&hl=vi): Safari chia sẻ/thêm màn hình chính/bật dạng web app nếu có; Chrome menu cài đặt và tạo lối tắt/cài đặt, kèm tên mục ở phiên bản khác. Có nguồn chính thức, mẹo không thấy mục cài, mở từ trình duyệt ngoài ứng dụng, và bật lời nhắc sau cài. Review vẫn ghi rõ thông báo thật tắt.
+- Chrome QA desktop: hai tab hiển thị đúng bốn hình và nội dung tương ứng. Mũi tên/Home/End chuyển tab và reset vùng cuộn về đầu; mẹo mở được và URL nguồn đúng. Tiêu đề, tab và nút Đã hiểu giữ vị trí, chỉ cuộn phần hướng dẫn.
+- QA 390×844 và 320×740 không tràn ngang. 320px: dialog x=17..303, rộng trong 284px bằng scrollWidth; nút đóng cao 44px, nằm trong viewport. Escape đóng dialog, bỏ khóa cuộn và trả focus về Hướng dẫn cài đặt.
+- Đây là kiểm tra nội dung và responsive trên Chrome desktop; chưa thực hiện cài PWA hoặc cấp quyền thông báo trên điện thoại thật trong lần này.
 
-Các test tích hợp dùng EF InMemory, chỉ để kiểm tra hành vi HTTP/quyền. Chưa kiểm tra trên SQL thật: SQL translation, ràng buộc khóa ngoại, upload sau khởi động lại, tranh chấp rowversion, worker / lease / retry và khôi phục backup.
+## Cần kiểm chứng ở môi trường triển khai
 
-Chưa kiểm tra trên điện thoại: hiển thị các màn hình và bàn phím, photo picker / SecureStore, nhận push, chạm notification, khóa máy / nền / đóng app, nhiều thiết bị, chuyển tài khoản, ngày giờ/múi giờ trên thiết bị. Chưa có Apple signing / Firebase / Expo project ID để làm các bước này.
+1. SQL Server: migrations và các luồng CRUD/ảnh/worker thật; test SQLite/InMemory không thay thế kiểm thử SQL.
+2. Domain HTTPS, cấu hình VAPID với email vận hành, public/private key và bật worker. Private key đã tạo trong cấu hình Local bị ignore; không hiển thị hay commit.
+3. Push thực trên iPhone và Samsung: khóa máy/đóng app, permission, bấm deep link, dời/hủy, đổi tài khoản. Provider accepted không chứng minh điện thoại hiển thị.
+4. Chạy một worker. Retry có thể trùng nếu process dừng sau vendor chấp nhận nhưng trước SQL commit; chưa nghiệm thu nhiều worker.
+5. Backup SQL + kho ảnh và phục hồi, quyền service account, dung lượng upload/proxy, theo dõi lỗi.
 
-`npm audit` hiện báo 30 mục (20 high, 10 moderate), chủ yếu đi theo chuỗi dependency Expo / Metro / công cụ build, cùng `decode-uri-component` và `uuid`. Đã chạy cập nhật tương thích qua `npm audit fix`; các mục này vẫn còn. Registry hiện trả bản mới nhất `braces=3.0.3` và `node-forge=1.4.0`, vẫn nằm trong vùng cảnh báo. Công cụ gợi ý force về Expo 44 hoặc thay Router 58, không phải bản sửa tương thích với bộ SDK 57 đã chọn. Chưa áp thay đổi major/override chưa kiểm thử; cần giải quyết và đánh giá lại trước production. Không tuyên bố dependency audit sạch.
+## Giới hạn rõ ràng
 
-Không deploy server, không gửi cloud build và không mua dịch vụ trong lần làm này.
-
-## Cập nhật kết nối SQL — 06/10/2026
-
-- Cổng TCP 1433 của máy chủ do người dùng cung cấp truy cập được từ máy phát triển.
-- Đã đăng nhập SQL Authentication thành công và đọc metadata trong `master`: SQL Server 2022, version `16.0.4215.2`, `Developer Edition (64-bit)`.
-- Database `ClientStudio` chưa tồn tại. Chưa tạo database, chạy migrations hoặc thay đổi dữ liệu trên máy chủ công ty.
-- Kết nối có kiểm tra chứng chỉ bị lỗi chuỗi chứng chỉ không được tin cậy. Lần chẩn đoán thành công sử dụng `TrustServerCertificate=true`, vẫn giữ mã hóa. API cho phép tùy chọn này **chỉ trong Development**; cấu hình mặc định vẫn kiểm tra chứng chỉ.
-- Thông tin đăng nhập chỉ ở `apps/api/appsettings.Local.json`, được bỏ qua bởi Git và loại khỏi output/publish. Không lưu mật khẩu trong tài liệu hoặc mã công cụ chẩn đoán.
-- Công cụ `tools/sql-probe` chỉ đọc phiên bản và metadata database, không tạo database, bảng hay tài khoản.
-
-Developer Edition dùng cho phát triển/kiểm thử; cần phiên bản phù hợp khi đưa vào production theo [tài liệu Microsoft](https://learn.microsoft.com/en-us/sql/sql-server/editions-and-components-of-sql-server-2022).
+- Review dùng dữ liệu hư cấu, thông báo thật tắt; HTTP LAN không đủ cho PWA/push trên điện thoại.
+- App cần mạng để xem/lưu; Service Worker chỉ giữ trang offline và icon, không cache hồ sơ hay ảnh. Chưa có ghi offline.
+- Phiên hiệu lực 7 ngày; hết phiên cần đăng nhập lại và đồng bộ subscription. Logout ngừng push của phiên đó.
+- Push phụ thuộc kết nối, browser vendor và thiết lập OS; không phải báo thức offline chính xác tuyệt đối.
+- Bản web được xây tại workspace, chưa triển khai lên server công ty hay đưa dữ liệu khách lên dịch vụ hosting ngoài.

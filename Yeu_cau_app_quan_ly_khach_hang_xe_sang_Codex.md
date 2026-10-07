@@ -1,5 +1,7 @@
 # Đặc tả app quản lí và chăm sóc khách hàng xe sang
 
+> **Cập nhật 07/10/2026 — phiên bản web/PWA:** Người dùng yêu cầu bỏ dự án mobile và chuyển sang web app, thiết kế lại giao diện và trau chuốt tính năng. Nền tảng hiện tại là React + TypeScript + Vite PWA, ASP.NET Core và SQL Server; Web Push thay Expo/native push. Giữ luồng mở danh sách khách và hồ sơ bốn tab, dữ liệu riêng mỗi nhân viên và các yêu cầu nghiệp vụ dưới đây. Thiết kế mới dùng trắng ngà, xanh trầm, chữ serif/sans, thích ứng desktop/điện thoại; không còn bị ràng buộc bởi mẫu mobile ở mục2. Hướng dẫn nền tảng/build/thông báo mới trong README và docs/architecture.md có ưu tiên hơn các chỉ dẫn mobile cũ trong tài liệu gốc này.
+
 **Phiên bản:** 1.0 — 06/10/2026  
 **Mục đích:** Giao tài liệu này cho Codex để xây dựng ứng dụng đúng yêu cầu đã thống nhất.  
 **Người dùng chính:** Một nhân viên bán xe Mercedes-Benz; thiết kế có thể sử dụng cho Audi và các hãng xe sang khác.  

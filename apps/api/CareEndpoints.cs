@@ -5,6 +5,15 @@ public static class CareEndpoints
 {
     public static void Map(RouteGroupBuilder api)
     {
+        api.MapGet("/agenda", async (HttpContext ctx, StudioDb db) => {
+            var end = DateTimeOffset.UtcNow.AddDays(366);
+            return Results.Ok(await (from o in db.Occurrences.AsNoTracking() join r in db.Reminders on o.ReminderId equals r.Id
+                join c in db.Customers on r.CustomerId equals c.Id
+                where c.OwnerId == ctx.Owner() && r.Active && o.State == "pending" && o.ScheduledAt <= end
+                orderby o.ScheduledAt
+                select new { occurrence = o, reminder = r, customerId = c.Id, customerName = c.Name, c.Phone, c.AvatarId })
+                .Take(1000).ToListAsync());
+        });
         api.MapGet("/customers/{id:guid}/contacts", async (Guid id, HttpContext ctx, StudioDb db) =>
             await CustomerEndpoints.Owned(db, ctx, id) ? Results.Ok(await db.Contacts.AsNoTracking().Where(x => x.CustomerId == id)
                 .OrderByDescending(x => x.At).ToListAsync()) : Results.NotFound());

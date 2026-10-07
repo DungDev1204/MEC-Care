@@ -11,3 +11,6 @@
 *.log
 artifacts/
 **/review-data/
+**/*.tsbuildinfo
+apps/api/wwwroot/
+.
