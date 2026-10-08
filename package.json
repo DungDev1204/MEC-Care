@@ -1,0 +1,8 @@
+{
+  "name": "cliente", "private": true, "engines": { "node": ">=24" },
+  "scripts": {
+    "dev": "npm --prefix apps/api run dev", "review": "npm --prefix apps/api run review",
+    "build": "npm --prefix apps/web run build && npm --prefix apps/api run build && node scripts/copy-web.mjs",
+    "test": "npm --prefix apps/api test && npm --prefix apps/web test", "start": "npm --prefix apps/api start"
+  }
+}

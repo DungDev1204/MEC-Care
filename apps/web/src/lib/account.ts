@@ -1,5 +1,5 @@
 export type AccountInfo = {
-  email: string; displayName: string; phone: string; expiresAt: string; timeZone: string;
+  username: string | null; email: string; displayName: string; phone: string; expiresAt: string; timeZone: string;
   customers: number; photos: number; contacts: number; reminders: number;
 };
 export async function downloadBackup(includePhotos: boolean) {

@@ -1,6 +1,6 @@
 # Clienté · Web app / PWA
 
-Không gian quản lý và chăm sóc khách hàng xe sang, dùng trên máy tính, iPhone và Samsung. **Ngày 07/10/2026, dự án chuyển hoàn toàn từ mobile Expo sang web/PWA.** Mã mobile và script build native đã được gỡ; backend nghiệp vụ, SQL và kho ảnh được giữ lại. Dependency mobile cũ không còn dùng nằm trong `artifacts/mobile-dependencies-legacy/` (không đưa vào Git).
+Không gian quản lý và chăm sóc khách hàng xe sang, dùng trên máy tính, iPhone và Samsung. Dự án đã chuyển từ mobile Expo sang web/PWA; backend hiện dùng Node.js + TypeScript + Express, frontend React + TypeScript. SQL Server MEC và kho ảnh được giữ khi cập nhật. Mã mobile, mã C# và cấu hình JSON .NET cũ đã được gỡ khỏi mã nguồn.
 
 Sau đăng nhập mở thẳng **danh sách khách hàng**. Thiết kế mới dùng trắng ngà, xanh trầm, chữ serif cho tiêu đề và Be Vietnam Pro cho nội dung; font được đóng gói tại chỗ. Desktop có thanh điều hướng và lịch cạnh danh sách, điện thoại có điều hướng dưới màn hình.
 
@@ -21,42 +21,41 @@ Sau đăng nhập mở thẳng **danh sách khách hàng**. Thiết kế mới d
 
 ## Xem ngay trên máy này
 
-Yêu cầu .NET 10 SDK và Node 22.12+ / 24 LTS tương thích Vite. Dữ liệu Review dùng SQLite riêng; thông báo thật tắt.
+Yêu cầu Node.js 24 LTS. Backend Express và frontend React cùng dùng TypeScript; cấu hình vận hành bằng .env. Dữ liệu Review dùng SQLite riêng; thông báo thật tắt.
 
-Terminal 1, tại thư mục gốc:
-
-```powershell
-dotnet run --project apps/api --launch-profile review
-```
-
-Terminal 2:
+Tại thư mục gốc, cài dependency và build lần đầu:
 
 ```powershell
-.\scripts\start-review-web.ps1
+npm --prefix apps/api ci
+npm --prefix apps/web ci
+npm run build
+npm run review
 ```
 
-Mở **http://localhost:8081**. Nút **Điền tài khoản thử** có trong màn hình đăng nhập Review. Tài khoản `review@clientstudio.local` / `Review123!` có sáu hồ sơ hư cấu ban đầu. Tài khoản `review2@clientstudio.local` cùng mật khẩu có dữ liệu riêng. Các thao tác thử được lưu bền vững trong `apps/api/review-data/`; không trộn với SQL công ty. Chi tiết: [Review](docs/review.md), [điện thoại](docs/review-phone.md).
+Mở **http://localhost:5180**; một cổng phục vụ cả web và API. Nút **Điền tài khoản thử** có trong màn hình đăng nhập Review. Tài khoản `review@clientstudio.local` / `Review123!` có sáu hồ sơ hư cấu ban đầu. Tài khoản `review2@clientstudio.local` cùng mật khẩu có dữ liệu riêng. Các thao tác thử được lưu bền vững trong `apps/api/review-data/`; không trộn với SQL công ty. Khi cần frontend tự cập nhật lúc sửa mã, dùng các lệnh npm theo [hướng dẫn phát triển](docs/review.md); [thử trên điện thoại](docs/review-phone.md).
 
 ## Build và triển khai cùng API
 
 ```powershell
-.\scripts\build-web.ps1
-dotnet publish apps/api -c Release -o artifacts/web-app
+npm run build
 ```
 
-Script build tạo frontend trong `apps/api/wwwroot`; ASP.NET phục vụ cả web và API trên cùng domain. Bản Review cũng có thể mở ở **http://localhost:5180** sau khi build rồi khởi động lại API. Build/publish không triển khai lên máy chủ công ty và không chạy migrations trên SQL.
+Script build tạo frontend trong `apps/api/wwwroot`; Node.js phục vụ cả web và API trên cùng domain. Bản Review cũng có thể mở ở **http://localhost:5180** sau khi build rồi khởi động lại API. Build/publish không triển khai lên máy chủ công ty và không chạy migrations trên SQL.
 
-Production: dùng SQL Server 2019+ (server đã kiểm tra là SQL Server 2022), database riêng `ClientStudio`, HTTPS, thư mục ảnh bền vững và tài khoản service có quyền cần thiết. Cấp connection string qua secret hoặc `ConnectionStrings__SqlServer`; không đưa secret vào Git. `appsettings.Local.json`, Review data, `wwwroot` sinh từ build và artifacts bị ignore. File cấu hình Local không được publish: phải cấp cấu hình ở máy chủ.
+Production dùng SQL Server 2019+ (server đã kiểm tra là SQL Server 2022), database `MEC`, HTTPS và thư mục ảnh bền vững. Toàn bộ cấu hình vận hành đọc từ **`.env`**, theo mẫu [deploy/ubuntu/.env.example](deploy/ubuntu/.env.example): `DB_SERVER`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `PORT`, `BIND_ADDRESS`, `ALLOWED_HOSTS`, `PUSH_*`. Ubuntu dùng `/etc/cliente/.env`, local dùng `apps/api/.env`; có thể chọn đường dẫn bằng `CLIENTE_ENV_FILE`. File secret `.env` không đưa vào Git hoặc gói publish. Biến môi trường thực tế ưu tiên hơn giá trị trong file. Các lệnh CLI và service cùng đọc một file `.env`.
 
-IT xem [script SQL idempotent](docs/database.sql) hoặc chạy `dotnet ef database update --project apps/api` **sau khi chọn đúng database**. Migration `WebPushSubscriptions` bổ sung metadata đăng ký web; `EmployeePersonalInfo` thêm tên hiển thị và điện thoại nhân viên; không xóa hồ sơ. Cần áp dụng các migration này trước khi chạy bản API mới trên SQL. Tạo tài khoản nhân viên bằng `dotnet run --project apps/api -- --provision-user`.
+Backend Node kết nối SQL Server MEC; [script SQL idempotent](docs/database.sql) dùng khi cài mới hoặc nâng cấp. Bản đăng ký OTP/admin cần chạy CLI `--migrate-auth` trước khi cập nhật máy chủ để nâng schema và gán username cho tài khoản cũ. Người dùng đăng ký username, email và mật khẩu tối thiểu 6 ký tự tại `/register`, xác minh OTP email rồi đăng nhập bằng username. Trang chủ hiển thị yêu cầu đăng ký gói; admin kích hoạt thì mới sử dụng các chức năng chăm sóc khách hàng. Trang `/admin` có giao diện riêng để quản lý người dùng, kích hoạt/gia hạn theo tháng, khóa tài khoản, cài đặt đăng ký và tạo thông báo cho mọi người dùng với lịch bắt đầu/kết thúc. Người dùng có thể ẩn từng thông báo cho các lần truy cập sau. Tài khoản `admin@admin.com` hiện có được cấp quyền bằng script, giữ nguyên mật khẩu. Xem [hướng dẫn đăng ký và admin](docs/registration-admin.md).
 
 ## Web Push thật
 
+Triển khai Ubuntu + Cloudflare, hostname `care.tranie-mua.io.vn` và SQL database `MEC`: xem [hướng dẫn và lệnh máy chủ](docs/deploy-ubuntu.md). Có mẫu systemd, cấu hình production và script `scripts/package-ubuntu.ps1`; cấu hình/ảnh nằm ngoài thư mục release để giữ dữ liệu khi cập nhật hoặc đổi domain.
+
 ```powershell
-dotnet run --project apps/api -- --create-push-keys
+cd apps/api
+node dist/server.js --create-push-keys
 ```
 
-Lệnh tạo cặp VAPID vào file Local bị ignore, không in private key; giữ nguyên khóa đã có. Đặt `Push:Subject` thành email vận hành dạng `mailto:...`, cấp PublicKey / PrivateKey qua secret ở máy chủ rồi bật `Push:Enabled=true`. Không đổi cặp khóa sau khi người dùng đăng ký nếu chưa có kế hoạch đăng ký lại.
+Lệnh tạo cặp VAPID vào `.env` bị ignore, không in private key; giữ nguyên khóa đã có. Đặt `PUSH_SUBJECT=mailto:...`, `PUSH_PUBLIC_KEY`, `PUSH_PRIVATE_KEY` và bật `PUSH_ENABLED=true` trong `.env`. CLI `--set-push-contact email@domain.vn` lưu email và bật push sau khi kiểm tra khóa. Không đổi cặp khóa sau khi người dùng đăng ký nếu chưa có kế hoạch đăng ký lại.
 
 Không còn Expo, APNs signing, Firebase project hoặc bản IPA/APK. Chrome/Samsung Internet và Safari PWA dùng Web Push tiêu chuẩn. iPhone cần iOS 16.4+, Safari → Thêm vào Màn hình chính → mở từ biểu tượng → Bật thông báo. Samsung dùng Chrome hoặc Samsung Internet qua HTTPS, cấp quyền thông báo. `/api/push/config` chỉ trả public key và trạng thái.
 
@@ -67,12 +66,12 @@ Push cần mạng, quyền thông báo và server hoạt động; Không làm ph
 ## Kiểm tra
 
 ```powershell
-dotnet test ClientStudio.sln
+npm --prefix apps/api test
 cd apps/web
 npm test
 npm run build
 ```
 
-Chạy test .NET khi tiến trình API dùng cùng output đã dừng, hoặc dùng `dotnet test -c Release` nếu đang preview Debug. Test dùng InMemory và SQLite riêng, không truy cập SQL công ty. Xem [kết quả và giới hạn kiểm tra](docs/verification.md), [kiến trúc](docs/architecture.md).
+Test API Node dùng SQLite riêng, không truy cập SQL công ty. Kiểm tra SQL thật chỉ chạy riêng bằng test/sql-smoke.ts và dữ liệu thử được rollback. Xem [kết quả kiểm tra](docs/verification.md), [kiến trúc](docs/architecture.md).
 
-Tham khảo triển khai: [Samsung Web Push](https://developer.samsung.com/browser/android/web-developer-guide.html), [Apple Web Push](https://developer.apple.com/documentation/usernotifications/sending-web-push-notifications-in-web-apps-and-browsers), [Lib.Net.Http.WebPush](https://github.com/tpeczek/Lib.Net.Http.WebPush).
+Tham khảo triển khai: [Samsung Web Push](https://developer.samsung.com/browser/android/web-developer-guide.html), [Apple Web Push](https://developer.apple.com/documentation/usernotifications/sending-web-push-notifications-in-web-apps-and-browsers), [web-push](https://github.com/web-push-libs/web-push).

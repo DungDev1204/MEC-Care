@@ -1,12 +1,12 @@
-# Kiến trúc web/PWA — 07/10/2026
+# Kiến trúc web/PWA — 08/10/2026
 
-Theo yêu cầu mới, thay React Native/Expo bằng **React + TypeScript + Vite**, HTML/CSS thích ứng desktop và điện thoại. Giữ ASP.NET Core .NET 10, EF Core và SQL Server vì các module hồ sơ, ảnh, chăm sóc, lịch và phân quyền đã có. Không tạo CRM đại lý hoặc thay màn hình đầu bằng dashboard.
+Frontend React + TypeScript + Vite; backend Node.js 24 + TypeScript + Express. SQL Server MEC và kho ảnh hiện có được giữ. Cấu hình duy nhất cho vận hành là .env; không cần runtime .NET.
 
-Luồng triển khai: `Safari PWA / Chrome / Samsung Internet / desktop → HTTPS cùng domain → ASP.NET Core → SQL Server + kho ảnh`. Frontend build vào `wwwroot`; deep link có fallback đến index, các đường dẫn `/api` và `/auth` không fallback. Dev dùng Vite proxy, không cần đưa URL SQL hoặc secret vào frontend.
+Luồng triển khai: `Safari PWA / Chrome / Samsung Internet / desktop → HTTPS cùng domain → Node.js / Express → SQL Server + kho ảnh`. Frontend build vào `wwwroot`; deep link có fallback đến index, các đường dẫn `/api` và `/auth` không fallback. Dev dùng Vite proxy, không cần đưa URL SQL hoặc secret vào frontend.
 
 Authentication dùng cookie HttpOnly, SameSite Strict, Secure ở production, thời hạn 7 ngày. Giữ Bearer cho test và API client hiện có. Các thao tác trình duyệt từ Origin khác bị chặn. Tài khoản và dữ liệu kiểm tra theo owner ở mọi endpoint, ảnh không public và không cache trong Service Worker. Session ID liên kết đăng ký push; đăng xuất disable thiết bị của phiên, worker chỉ gửi khi nhân viên và phiên còn hiệu lực. Khôi phục sau hết phiên yêu cầu đăng nhập; deep link từ thông báo được giữ trong URL login.
 
-Web Push dùng VAPID và `Lib.Net.Http.WebPush` với mã hóa `aes128gcm` (RFC 8291), thay hoàn toàn Expo Push. `Devices.PushToken` chứa SHA-256 của endpoint để giữ index nhỏ; Endpoint, P256dh, AuthKey và SessionId là metadata mới. Các endpoint push chỉ được phép trỏ đến dịch vụ browser vendor trong allowlist, tránh gọi URL nội bộ tùy ý. Frontend xin quyền bằng thao tác trực tiếp của người dùng, đăng ký Service Worker, lưu subscription ở API; iPhone cần standalone PWA. Public key công khai, private key chỉ ở cấu hình server. Khóa được tạo bằng CLI không in secret.
+Web Push dùng VAPID và `web-push` với mã hóa `aes128gcm` (RFC 8291), thay hoàn toàn Expo Push. `Devices.PushToken` chứa SHA-256 của endpoint để giữ index nhỏ; Endpoint, P256dh, AuthKey và SessionId là metadata mới. Các endpoint push chỉ được phép trỏ đến dịch vụ browser vendor trong allowlist, tránh gọi URL nội bộ tùy ý. Frontend xin quyền bằng thao tác trực tiếp của người dùng, đăng ký Service Worker, lưu subscription ở API; iPhone cần standalone PWA. Public key công khai, private key chỉ ở cấu hình server. Khóa được tạo bằng CLI không in secret.
 
 Lịch gốc và từng lần nhắc vẫn tách `Reminder` / `Occurrence`: annual giữ những lần năm sau khi hoàn thành một lần; sửa lịch tăng revision và hủy pending cũ. Dời một lần cập nhật NotifyAt và ScheduledAt, bỏ delivery cũ để gửi đúng giờ mới. Giờ lưu theo Asia/Ho_Chi_Minh, thời điểm thực thi UTC; form web giữ UTC+7 dù timezone thiết bị khác.
 

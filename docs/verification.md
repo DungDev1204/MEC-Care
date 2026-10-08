@@ -1,14 +1,36 @@
-# Kết quả kiểm tra — Web/PWA 07/10/2026
+# Kiểm tra backend Node.js — 08/10/2026
 
-- `dotnet test tests/api -c Release`: **27/27 pass**. Bao gồm quyền owner hồ sơ/ảnh/lịch, search không dấu, phone duplicate, annual/leap-day, chăm sóc + followup, SQLite bền vững, cookie HttpOnly/Secure/SameSite, logout thu hồi đăng ký, từ chối Origin khác, allowlist push, từ chối public key sai, đăng ký idempotent, lịch chung riêng từng owner, retry worker, gửi một lần, payload không lộ chi tiết khách và phiên hết hạn không gửi. Test transport thực qua HTTP handler xác nhận mã hóa `aes128gcm`, VAPID và TTL; không gửi đến vendor thật. Hai bài mới xác nhận sửa hồ sơ/session theo owner, chuẩn hóa điện thoại, dữ liệu sai/unauth; ZIP gồm đúng quan hệ và bytes ảnh/checksum, không lộ owner khác/credentials, tùy chọn bỏ ảnh và lỗi khi thiếu ảnh.
-- `npm test` trong `apps/web`: **5/5 pass**. Search tiếng Việt, tuổi, UTC+7 trên thiết bị timezone khác, initials Review, deep-link return an toàn.
-- `npm run build`: TypeScript và Vite production build thành công.
-- `scripts/build-web.ps1`: chuẩn bị frontend vào `apps/api/wwwroot` để chạy/publish cùng API.
-- `dotnet build apps/api` và `dotnet publish apps/api -c Release -o artifacts/web-app`: thành công, không cảnh báo/lỗi. Bản publish có web assets, không chứa cấu hình Local có secret.
-- Dependency web audit ở thời điểm cài: **0 vulnerabilities**. Restore .NET không báo cảnh báo vulnerability.
-- SQL migration `WebPushSubscriptions`, `EmployeePersonalInfo` và script SQL idempotent đã sinh. **Chưa thực thi trên SQL công ty**.
-- Browser QA trên Chrome local: đăng nhập, tìm không dấu, thêm khách kèm xe, chăm sóc kèm followup, hồ sơ bốn tab, dời lần nhắc bằng bàn phím, màn hình tài khoản và thông báo tắt trong Review. Bố cục điện thoại không tràn ngang ở viewport 390×844 (375px nội dung sau scrollbar). Lỗi serializer trường vehicle id được phát hiện và sửa trong QA.
-- Upload qua file chooser tự động bị Chrome extension từ chối vì chưa cấp quyền truy cập file URL. API ảnh được kiểm thử riêng; chưa xác nhận end-to-end upload/nén ảnh từ trình duyệt tự động trong phiên này.
+## Giao diện gọn và thông báo admin
+
+- 30 kiểm thử API và 7 kiểm thử frontend đạt; build TypeScript/Vite đạt. 5 kiểm thử mới xác nhận quyền admin, lịch hiển thị, người dùng chưa có gói, ẩn theo tài khoản giữa các phiên, gửi đồng thời không tạo bản ghi ẩn trùng, dừng thông báo và audit. Nội dung HTML được giữ như văn bản thuần; dữ liệu của người khác không bị thay đổi.
+- Chrome QA trên database SQLite trong bộ nhớ: trang khách hàng có một tiêu đề và thanh tìm kiếm/lọc gọn; màn hình 390×844 hiển thị nhiều khách ngay khi mở app. Đã kiểm tra cả 320×740; chiều rộng nội dung bằng viewport và không tràn ngang. Admin không có sidebar hay thanh điều hướng khách hàng, có tab tạo/lên lịch thông báo và danh sách trạng thái.
+- Đã tạo thông báo qua UI admin trong môi trường thử, đăng nhập tài khoản khác và thấy dialog. Nút Đóng cho phép thông báo xuất hiện lại khi tải lại app. Nút Không hiện lại lưu thành công và dialog không xuất hiện sau khi tải lại. Hộp thoại 390×844 hiển thị đầy đủ nội dung và các nút. Không tạo thông báo cho người dùng thật và không gửi email trong QA.
+- Gói mới cần migration thêm hai bảng thông báo trên MEC trước khi đổi release. Tự dọn các release cũ chỉ chạy sau khi bản mới vượt qua health.
+
+## Bản username và đăng ký gói
+
+- 25 kiểm thử API và 7 kiểm thử frontend đạt; build TypeScript/Vite đạt. Bao gồm mật khẩu đúng 6 ký tự, username không phân biệt hoa/thường, xác minh OTP, tài khoản chưa có gói đăng nhập được, yêu cầu gói không trùng, admin kích hoạt, gia hạn sau hết hạn và khóa tài khoản. Tài khoản chưa có gói/hết hạn bị chặn API dữ liệu, ảnh, backup và Web Push; thông tin cá nhân vẫn truy cập được.
+- Chrome QA với database SQLite trong bộ nhớ: đăng nhập username `pending`, gửi yêu cầu gói, admin thấy yêu cầu và kích hoạt 1 tháng, người dùng đăng nhập lại thấy trang khách hàng. Trang gói được xem ở desktop và 390×844, không tràn ngang và các nút đều truy cập được. Database thử không gửi email hoặc truy cập MEC thật.
+- Kiểm tra rollback với SQLite: giữ nguyên trạng thái và mật khẩu tài khoản cũ, khóa lại tài khoản chưa có gói khi quay về backend cũ, kể cả tài khoản mới trong lần triển khai. Script triển khai tạo bản sao SQL `COPY_ONLY` có checksum cùng ảnh/cấu hình trước migration.
+- Bản OTP/admin trước đang chạy ở `care.tranie-mua.io.vn`, service và Cloudflare Tunnel hoạt động. Gói username/đăng ký gói cần người vận hành chạy sudo để cập nhật release và schema. Các kết quả bên dưới thuộc những bản trước.
+
+## Tự dọn release sau cập nhật
+
+- Yêu cầu ngày 08/10/2026: mỗi lần cập nhật thành công chỉ giữ release đang chạy trên Ubuntu. `update.sh`, `upgrade-auth.sh` và `finish-setup.sh` gọi bước dọn tự động sau kiểm tra service/health; vẫn giữ bản trước khi cập nhật thất bại để rollback.
+- 6 kiểm thử trên Ubuntu/Node 24 đạt, dùng thư mục thử riêng và giả lập service/health. Xác nhận không xóa khi HTTP health lỗi, JSON không hợp lệ, sai mode production, service còn chạy release trước hoặc current không đúng bản dự kiến. Khi health đạt, xóa hết thư mục release cũ, giữ bản hiện tại, cấu hình và đích của symlink bên ngoài.
+- Chạy lại: `CLIENTE_CLEANUP_SCRIPT=/path/to/cleanup-old-releases.sh node --test scripts/test-ubuntu-cleanup.mjs` trên Linux. Kiểm thử không thao tác thư mục production.
+
+- Backend TypeScript và frontend React build đạt. 13 kiểm thử API Node đạt, bao gồm đăng ký/đăng nhập, dữ liệu riêng theo owner, CRUD khách/xe, search, số điện thoại trùng, ảnh/avatar, backup ZIP, chăm sóc + followup, complete/snooze/cancel, lịch annual/29-02/DST, session/logout, forwarded HTTPS và allowlist Web Push.
+- Đã tái hiện và sửa lỗi Node thoát với mã 0 khi CLI được gọi qua symlink của thư mục release. Kiểm thử regression chạy tiến trình thật qua liên kết, kiểm tra mã lỗi của lệnh không hợp lệ, việc ghi VAPID vào file tạm và HTTP health trên cổng thử được cấp tự động. HTTP test dùng SQLite Testing riêng, không truy cập SQL công ty. Script cập nhật in log service trước rollback nếu health thất bại.
+- Frontend có 5 kiểm thử đạt. Trang đăng ký/đăng nhập đã xem trực tiếp trong Chrome; tài khoản Review cũ đăng nhập được và thấy 7 khách cùng lịch đã lưu.
+- SQL Server MEC thật: schema và quyền đọc/ghi kiểm tra bằng test/sql-smoke.ts; có Unicode, GUID, date/datetimeoffset, foreign keys và conditional update. Toàn bộ dữ liệu smoke được rollback. Tin cậy chứng chỉ chỉ ghi đè tạm cho tiến trình chẩn đoán, .env giữ nguyên lựa chọn.
+- Dữ liệu Review cũ được chuẩn hóa UTC ticks và GUID viết hoa sang kiểu Node dùng. Snapshot SQLite review.db.before-node được tạo trước chuyển đổi; không reset hồ sơ, ảnh hoặc mật khẩu.
+- npm audit backend: còn 3 cảnh báo mức moderate qua mssql → tedious → sprintf-js; registry chưa có bản sprintf-js đã sửa. Không hạ mssql xuống bản 4 cũ theo gợi ý --force. Tedious dùng format nội bộ; không truyền format từ request của người dùng. Các cảnh báo high ban đầu trong rate limiter đã được xử lý bằng bản 8.7.1.
+- Chưa chạy bản Node trên Ubuntu, chưa đổi Cloudflare route, chưa gửi push thật đến thiết bị. SQL kiểm thử chạy từ máy Windows; môi trường triển khai Node 24/Linux cần kiểm tra qua script update và health.
+
+## Lịch sử kiểm tra UI trước khi đổi backend
+
+Các mục bên dưới là kết quả QA giao diện trước đó, không phải toàn bộ xác nhận cho bản Node.
 
 ## Rà UI sau phản hồi
 
@@ -59,3 +81,11 @@
 - Phiên hiệu lực 7 ngày; hết phiên cần đăng nhập lại và đồng bộ subscription. Logout ngừng push của phiên đó.
 - Push phụ thuộc kết nối, browser vendor và thiết lập OS; không phải báo thức offline chính xác tuyệt đối.
 - Bản web được xây tại workspace, chưa triển khai lên server công ty hay đưa dữ liệu khách lên dịch vụ hosting ngoài.
+# 2026-10-08: modal scrolling and upload package retention
+
+- Live verification: user supplied DEPLOYMENT_OK and the current release is `20261008T084400Z-auth-node`. Cliente and Cloudflare Tunnel are active; public health returns Node + SQL Server. Public HTML references `index-Vy_HOBGF.js` / `index-B-nP8M4A.css`; public CSS checksum matches the release. Only the current release and the newly deployed application upload archive remain.
+- Production build and 7 existing frontend tests pass.
+- Chrome QA with an isolated in-memory database: customer form at 1366x768 has a visible scrollbar; mouse scrolling reaches the Notes field while heading/actions remain fixed. At 390x844, keyboard End reaches all final fields without horizontal overflow. At 844x390, customer/reminder form actions remain inside the viewport and their field area scrolls.
+- Created a fictional customer through the UI and verified the saved note from the end of the form. Closing the reminder dialog restores page scrolling (body lock removed, page scroll position changes).
+- All 9 Linux cleanup tests pass. Healthy deployment removes old application packages and retains the uploaded current package. Failed health, running an older release, a mismatched frontend, or a symlinked upload path prevents deletion. Config, backup files and external symlink targets remain.
+- Rollout uses the original uploaded archive path alongside the staged archive checksum. Old upload packages are removed only after the new release passes production health.

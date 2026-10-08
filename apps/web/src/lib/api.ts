@@ -6,8 +6,9 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     if (response.status === 401 && path !== '/auth/login') window.dispatchEvent(new Event('session-expired'));
+    if (response.status === 403 && data.code === 'SUBSCRIPTION_REQUIRED') window.dispatchEvent(new CustomEvent('subscription-required', { detail: data }));
     const errors = data.errors ? Object.values(data.errors as Record<string, string[]>).flat().join(' ') : null;
-    throw new ApiError(data.message || errors || (response.status === 401 ? 'Email hoặc mật khẩu không đúng, hoặc phiên đăng nhập đã hết hạn.' : response.status === 404 ? 'Không tìm thấy dữ liệu này. Hãy tải lại.' : response.status === 400 ? 'Dữ liệu chưa hợp lệ. Kiểm tra các trường rồi thử lại.' : 'Chưa thực hiện được. Hãy thử lại.'), response.status, data);
+    throw new ApiError(errors || data.message || (response.status === 401 ? 'Username hoặc mật khẩu không đúng, hoặc phiên đăng nhập đã hết hạn.' : response.status === 404 ? 'Không tìm thấy dữ liệu này. Hãy tải lại.' : response.status === 400 ? 'Dữ liệu chưa hợp lệ. Kiểm tra các trường rồi thử lại.' : 'Chưa thực hiện được. Hãy thử lại.'), response.status, data);
   }
   return (response.status === 204 ? undefined : await response.json()) as T;
 }

@@ -6,4 +6,5 @@ describe('Vietnamese customer and reminder behavior', () => {
   it('uses Vietnam time even on devices in another timezone', () => { expect(localDateTime(new Date('2026-10-06T20:30:00Z'))).toBe('2026-10-07T03:30'); expect(formatTime('2026-10-07T09:00')).toContain('09:00'); });
   it('keeps initials meaningful in the labeled review data', () => { expect(initials('Nguyễn Minh Anh · Mẫu')).toBe('MA'); });
   it('restores notification deep links without allowing external redirects', () => { expect(safeReturn('/customers/123?tab=reminders')).toBe('/customers/123?tab=reminders'); expect(safeReturn('//attacker.invalid')).toBe('/'); expect(safeReturn('https://attacker.invalid')).toBe('/'); expect(safeReturn('/login')).toBe('/'); });
+  it('returns to admin while preventing auth loops and browser-normalized external paths', () => { expect(safeReturn('/admin')).toBe('/admin'); expect(safeReturn('/register')).toBe('/'); expect(safeReturn('/\\attacker.invalid')).toBe('/'); expect(safeReturn('/\n/attacker.invalid')).toBe('/'); });
 });

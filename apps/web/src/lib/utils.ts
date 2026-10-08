@@ -11,4 +11,4 @@ export const clockTime = (value: string) => new Intl.DateTimeFormat('vi-VN', { h
 export function age(birth?: string | null, at = today()) { if (!birth) return null; const [y, m, d] = birth.split('-').map(Number); const [ty, tm, td] = at.split('-').map(Number); return ty - y - (tm < m || (tm === m && td < d) ? 1 : 0); }
 export const initials = (name: string) => name.split(' · ')[0].split(/\s+/).filter(Boolean).slice(-2).map(s => s[0]).join('').toUpperCase();
 export const relativeContact = (date?: string | null) => { if (!date) return 'Chưa liên hệ'; const days = Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 86400000)); return days === 0 ? 'Hôm nay' : days === 1 ? 'Hôm qua' : `${days} ngày trước`; };
-export const safeReturn = (value: string | null) => value?.startsWith('/') && !value.startsWith('//') && !value.startsWith('/login') ? value : '/';
+export const safeReturn = (value: string | null) => value?.startsWith('/') && !value.startsWith('//') && !/[\\\u0000-\u001f\u007f]/.test(value) && !value.startsWith('/login') && !value.startsWith('/register') ? value : '/';
