@@ -9,7 +9,7 @@ import { realpathSync } from 'node:fs';
 import { migrateAuth } from './auth-schema.js';
 
 export async function main(args = process.argv.slice(2)) {
-  const config = readConfig(undefined, args.includes('--review') ? { ...process.env, APP_ENV:'Development',REVIEW_ENABLED:'true',PUSH_ENABLED:'false',BIND_ADDRESS:'0.0.0.0',PORT:'5180' } : process.env);
+  const config = readConfig(undefined, args.includes('--review') ? { ...process.env, APP_ENV:'Development',REVIEW_ENABLED:'true',PUSH_ENABLED:'false',BIND_ADDRESS:'0.0.0.0',PORT:'5180', ADMIN_APP_URL:'http://admin.localhost:5180', USER_APP_URL:'http://localhost:5180' } : process.env);
   if (args.includes('--create-push-keys')) {
     if (config.push.publicKey && config.push.privateKey) { console.log('Existing Web Push keys preserved.'); return; }
     if (config.push.publicKey || config.push.privateKey) throw new Error('Incomplete existing VAPID keys; restore the missing key before continuing.');

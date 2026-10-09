@@ -2,21 +2,26 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowRight, Eye, EyeOff, HeartHandshake, LoaderCircle, LockKeyhole, MailCheck } from 'lucide-react';
 import { post, request } from '../lib/api';
-import { safeReturn } from '../lib/utils';
+import { loginDestination, safeReturn } from '../lib/utils';
 import { useSession, type Session } from '../session';
 import { FormError } from '../components/ui';
+import { appIcon, appName, isAdminApp, isAdminPage, type AppConfig } from '../lib/app-mode';
+import { useResource } from '../lib/hooks';
 
-function Brand() { return <div className="brand"><img src="/icon.svg" alt=""/><span>Clienté<span className="brand-period">.</span></span></div>; }
+function Brand() { return <div className="brand"><img src={appIcon()} alt=""/><span>{appName()}<span className="brand-period">.</span></span></div>; }
 type Pending = { registrationId: string; email: string; resendAfterSeconds: number };
 export function Login({ review, register = false }: { review: boolean; register?: boolean }) {
+  const adminApp = isAdminApp(); const adminPage = isAdminPage(); const site = useResource<AppConfig>('/app/config');
   const [username, setUsername] = useState(''); const [confirmation, setConfirmation] = useState('');
   const [email, setEmailInput] = useState(''); const [loginName, setLoginName] = useState(''); const [password, setPassword] = useState('');
   const [visible, setVisible] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   const [pending, setPending] = useState<Pending | null>(null); const [code, setCode] = useState('');
   const [verified, setVerified] = useState(false); const [cooldown, setCooldown] = useState(0); const [message, setMessage] = useState('');
   const [registrationEnabled, setRegistrationEnabled] = useState(true);
+  const [subscriptionEnabled, setSubscriptionEnabled] = useState(true);
   const { setEmail, setDisplayName, setIsAdmin, setAccess } = useSession(); const [params] = useSearchParams(); const navigate = useNavigate();
-  useEffect(() => { if (register) request<{ registrationEnabled: boolean }>('/auth/registration/config').then(s => setRegistrationEnabled(s.registrationEnabled)).catch(() => {}); }, [register]);
+  useEffect(() => { document.title = adminPage ? 'Clienté Admin · Đăng nhập quản trị' : 'Clienté · Đăng nhập'; }, [adminPage]);
+  useEffect(() => { if (register) request<{ registrationEnabled: boolean; subscriptionEnabled: boolean }>('/auth/registration/config').then(s => { setRegistrationEnabled(s.registrationEnabled); setSubscriptionEnabled(s.subscriptionEnabled); }).catch(() => {}); }, [register]);
   useEffect(() => { if (cooldown <= 0) return; const timer = setTimeout(() => setCooldown(v => v - 1), 1000); return () => clearTimeout(timer); }, [cooldown]);
   async function submit(e: FormEvent) {
     e.preventDefault(); setError(''); setMessage('');
@@ -32,7 +37,7 @@ export function Login({ review, register = false }: { review: boolean; register?
       } else {
         const result = await post<Session>('/auth/login', { username: loginName, password });
         setEmail(result.email); setDisplayName(result.displayName); setIsAdmin(result.isAdmin); setAccess(result.canUseApp, result.accessStatus);
-        navigate(params.get('return') ? safeReturn(params.get('return')) : result.isAdmin ? '/admin' : '/', { replace: true });
+        navigate(adminApp ? '/admin?tab=orders' : loginDestination(result, params.get('return')), { replace: true });
       }
     } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   }
@@ -47,9 +52,9 @@ export function Login({ review, register = false }: { review: boolean; register?
     </section>
     <section className="login-form-side"><div className="login-form-wrap"><div className="mobile-login-brand"><Brand/></div>
       <span className="eyebrow">{verified ? 'ĐÃ XÁC MINH EMAIL' : pending ? 'XÁC MINH EMAIL' : register ? 'BẮT ĐẦU MỘT HÀNH TRÌNH' : 'CHÀO MỪNG TRỞ LẠI'}</span>
-      <h2>{verified ? 'Đăng ký thành công.' : pending ? 'Kiểm tra email của bạn.' : register ? <>Không gian riêng.<br/>Kết nối bền lâu.</> : <>Tiếp nối những<br/>mối quan hệ tốt đẹp.</>}</h2>
-      <p>{verified ? 'Đăng nhập bằng username để đăng ký gói sử dụng.' : pending ? <>Nhập mã 6 số đã gửi tới <strong>{pending.email}</strong>. Mã có hiệu lực 10 phút.</> : register ? 'Tạo username, xác minh email rồi đăng nhập để đăng ký gói.' : 'Đăng nhập để mở không gian của bạn.'}</p>
-      {review && !register && <div className="login-review"><span className="review-label">REVIEW</span> Môi trường thử với dữ liệu hư cấu.<button className="text-button" onClick={() => { setLoginName('review@clientstudio.local'); setPassword('Review123!'); }}>Điền tài khoản thử <ArrowRight size={14}/></button></div>}
+      <h2>{adminPage ? <>Quản trị Clienté.<br/>Kiểm soát đơn hàng.</> : verified ? 'Đăng ký thành công.' : pending ? 'Kiểm tra email của bạn.' : register ? <>Không gian riêng.<br/>Kết nối bền lâu.</> : <>Tiếp nối những<br/>mối quan hệ tốt đẹp.</>}</h2>
+      <p>{adminPage ? 'Đăng nhập bằng tài khoản quản trị viên.' : verified ? 'Đăng nhập bằng username để tiếp tục.' : pending ? <>Nhập mã 6 số đã gửi tới <strong>{pending.email}</strong>. Mã có hiệu lực 10 phút.</> : register ? subscriptionEnabled ? 'Tạo username, xác minh email rồi đăng nhập để đăng ký gói.' : 'Tạo username, xác minh email rồi đăng nhập để sử dụng.' : 'Đăng nhập để mở không gian của bạn.'}</p>
+      {review && !register && <div className="login-review"><span className="review-label">REVIEW</span> Môi trường thử với dữ liệu hư cấu.<button className="text-button" onClick={() => { setLoginName(adminApp ? 'review_admin' : 'review@clientstudio.local'); setPassword('Review123!'); }}>Điền tài khoản thử <ArrowRight size={14}/></button></div>}
       {register && !registrationEnabled && !verified && <FormError message="Đăng ký mới đang tạm đóng. Vui lòng liên hệ quản trị viên."/>}
       {message && <p className="auth-success" role="status"><MailCheck size={18}/>{message}</p>}
       {!verified && <form onSubmit={submit}><fieldset disabled={busy || register && !registrationEnabled}>
@@ -59,9 +64,9 @@ export function Login({ review, register = false }: { review: boolean; register?
           <label>Mật khẩu<div className="password-field"><input required type={visible ? 'text' : 'password'} autoComplete={register ? 'new-password' : 'current-password'} minLength={register ? 6 : undefined} maxLength={256} placeholder="Nhập mật khẩu của bạn" value={password} onChange={e => setPassword(e.target.value)}/><button type="button" className="icon-button" aria-label={visible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'} onClick={() => setVisible(v => !v)}>{visible ? <EyeOff size={18}/> : <Eye size={18}/>}</button></div>{register && <small className="auth-field-hint">Ít nhất 6 ký tự.</small>}</label>
           {register && <label>Nhập lại mật khẩu<input required type={visible ? 'text' : 'password'} autoComplete="new-password" minLength={6} maxLength={256} placeholder="Nhập lại mật khẩu" value={confirmation} onChange={e => setConfirmation(e.target.value)}/></label>}
         </>}
-      </fieldset><FormError message={error}/><button type="submit" className="button primary login-submit" disabled={busy || register && !registrationEnabled}>{busy && <LoaderCircle className="spin" size={18}/>} {busy ? 'Đang xử lý…' : pending ? 'Xác minh email' : register ? 'Gửi mã xác minh' : 'Vào không gian của bạn'}<ArrowRight size={18}/></button></form>}
+      </fieldset><FormError message={error}/><button type="submit" className="button primary login-submit" disabled={busy || register && !registrationEnabled}>{busy && <LoaderCircle className="spin" size={18}/>} {busy ? 'Đang xử lý…' : pending ? 'Xác minh email' : register ? 'Gửi mã xác minh' : adminPage ? 'Vào trang quản trị' : 'Vào không gian của bạn'}<ArrowRight size={18}/></button></form>}
       {pending && !verified && <div className="otp-actions"><button className="text-button" disabled={busy || cooldown > 0 || !registrationEnabled} onClick={resend}>{cooldown > 0 ? `Gửi lại mã sau ${cooldown}s` : 'Gửi lại mã'}</button><button className="text-button" disabled={busy} onClick={() => { setPending(null); setError(''); setMessage(''); setCode(''); }}>Đổi thông tin đăng ký</button></div>}
-      <div className="login-secure"><LockKeyhole size={16}/><span>Hồ sơ riêng. Kết nối an toàn.</span></div><div className="auth-switch"><span>{register ? 'Đã có tài khoản?' : 'Chưa có tài khoản?'}</span><Link className="text-button" to={`${register ? '/login' : '/register'}?return=${encodeURIComponent(safeReturn(params.get('return')))}`}>{register ? 'Đăng nhập' : 'Tạo tài khoản'}<ArrowRight size={14}/></Link></div>
+      {review && !register && <div className="review-account-buttons">{(adminApp ? [['review_admin','Admin thử']] : [['review_admin','Admin thử'],['review_new','Người mua thử'],['review_due','Gia hạn hôm nay']]).map(([username,label]) => <button key={username} className="button secondary" type="button" onClick={() => { setLoginName(username); setPassword('Review123!'); }}>{label}</button>)}</div>}<div className="login-secure"><LockKeyhole size={16}/><span>Hồ sơ riêng. Kết nối an toàn.</span></div>{!adminApp && <div className="auth-switch"><span>{register ? 'Đã có tài khoản?' : 'Chưa có tài khoản?'}</span><Link className="text-button" to={`${register ? '/login' : '/register'}?return=${encodeURIComponent(safeReturn(params.get('return')))}`}>{register ? 'Đăng nhập' : 'Tạo tài khoản'}<ArrowRight size={14}/></Link></div>}{adminApp && site.data?.userUrl && <div className="auth-switch"><span>Tài khoản người dùng?</span><a className="text-button" href={site.data.userUrl + "/login"}>Mở Clienté <ArrowRight size={14}/></a></div>}
     </div><footer>Chăm sóc khách hàng, bằng sự thấu hiểu.</footer></section>
   </div>;
 }

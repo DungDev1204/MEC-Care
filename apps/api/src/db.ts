@@ -3,17 +3,22 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { assignUserCodes, newUserCode } from './user-code.js';
 import type { Config } from './config.js';
 
 export type Row = Record<string, any>;
 export type Params = Record<string, string | number | boolean | Date | Buffer | null | undefined>;
 const tables = {
-  Employees: 'Id Email DisplayName Phone PasswordHash Enabled Username EmailVerified IsAdmin ActiveUntil AccessGranted', Sessions: 'Id EmployeeId TokenHash ExpiresAt',
+  Employees: 'Id Email DisplayName Phone PasswordHash Enabled Username EmailVerified IsAdmin ActiveUntil AccessGranted UserCode', Sessions: 'Id EmployeeId TokenHash ExpiresAt',
+  PaymentSettings: 'Id BankCode BankName AccountNumber AccountName MonthlyPrice ZaloUrl',
+  PurchaseOrders: 'Id Code EmployeeId UserCode Username Months Amount CreatedAt ReportedAt PaidAt ReviewedAt ReviewerId State PaymentState BankCode BankName AccountNumber AccountName ZaloUrl TransferContent TransactionReference RejectionReason ActiveBefore ActiveAfter',
+  AdminOrderNotifications: 'Id EmployeeId OrderId CreatedAt ReadAt',
+  OrderPushDeliveries: 'Id NotificationId DeviceId State Attempts RetryAt LeaseUntil',
   SubscriptionRequests: 'Id CreatedAt State',
   Announcements: 'Id Title Content StartsAt EndsAt Enabled CreatedAt CreatedBy',
   AnnouncementDismissals: 'Id AnnouncementId EmployeeId CreatedAt',
   Registrations: 'Id Email Username PasswordHash CodeHash ExpiresAt CreatedAt SentAt Attempts Sends',
-  SystemSettings: 'Id RegistrationEnabled DefaultActivationMonths',
+  SystemSettings: 'Id RegistrationEnabled DefaultActivationMonths SubscriptionEnabled TelegramCommunityUrl',
   AdminAudit: 'Id ActorId TargetId Action CreatedAt Details',
   Customers: 'Id OwnerId Name SearchText Phone BirthDate Interests Notes PreferredContact Status AvatarId UpdatedAt',
   Vehicles: 'Id CustomerId Model Plate DeliveryDate', Photos: 'Id CustomerId FileName ContentType Caption IsAvatar CreatedAt',
@@ -24,15 +29,16 @@ const tables = {
   Deliveries: 'Id OccurrenceId DeviceId State Attempts RetryAt LeaseUntil ReceiptId'
 } as const;
 export type Table = keyof typeof tables;
-const timeColumns = ['At','ExpiresAt','ActiveUntil','StartsAt','EndsAt','SentAt','UpdatedAt','CreatedAt','OriginalAt','ScheduledAt','NotifyAt','CompletedAt','RetryAt','LeaseUntil'];
+const timeColumns = ['At','ExpiresAt','ActiveUntil','ActiveBefore','ActiveAfter','ReportedAt','PaidAt','ReviewedAt','ReadAt','StartsAt','EndsAt','SentAt','UpdatedAt','CreatedAt','OriginalAt','ScheduledAt','NotifyAt','CompletedAt','RetryAt','LeaseUntil'];
 function normalize(row: Row): Row {
   return Object.fromEntries(Object.entries(row).map(([key, raw]) => {
     const name = key[0].toLowerCase() + key.slice(1); let value = raw;
     if (raw instanceof Date) value = ['BirthDate', 'DeliveryDate'].includes(key) ? raw.toISOString().slice(0, 10) : key === 'LocalDateTime' ? raw.toISOString().slice(0, 19) : raw.toISOString();
     if (typeof raw === 'number' && timeColumns.includes(key)) value = new Date(raw).toISOString();
     if (typeof raw === 'string' && (key === 'Id' || key.endsWith('Id')) && /^[0-9a-f-]{36}$/i.test(raw)) value = raw.toLowerCase();
-    if (['Enabled', 'Active', 'IsAvatar', 'EmailVerified', 'IsAdmin', 'AccessGranted', 'RegistrationEnabled'].includes(key)) value = !!raw;
-    if (['EmailVerified', 'AccessGranted'].includes(key) && raw == null) value = true;
+    if (['Enabled', 'Active', 'IsAvatar', 'EmailVerified', 'IsAdmin', 'AccessGranted', 'RegistrationEnabled', 'SubscriptionEnabled'].includes(key)) value = !!raw;
+    if (['Amount','Months','MonthlyPrice','Attempts'].includes(key) && raw != null) value = Number(raw);
+    if (['EmailVerified', 'AccessGranted', 'SubscriptionEnabled'].includes(key) && raw == null) value = true;
     if (raw instanceof Uint8Array) value = Buffer.from(raw).toString('base64');
     return [name, value];
   }));
@@ -44,15 +50,19 @@ export class Database {
       if (config.reviewDatabase !== ':memory:') fs.mkdirSync(path.dirname(config.reviewDatabase), { recursive: true });
       const sqlite = new DatabaseSync(config.reviewDatabase);
       for (const [table, columns] of Object.entries(tables)) {
-        sqlite.exec(`CREATE TABLE IF NOT EXISTS [${table}] (${columns.split(' ').map(c => `[${c}] ${c === 'Id' ? 'TEXT PRIMARY KEY' : ['Enabled','Active','IsAvatar','LeadDays','Revision','Attempts','Sends','EmailVerified','IsAdmin','AccessGranted','RegistrationEnabled','DefaultActivationMonths'].includes(c) ? 'INTEGER' : 'TEXT'}`).join(',')})`);
+        sqlite.exec(`CREATE TABLE IF NOT EXISTS [${table}] (${columns.split(' ').map(c => `[${c}] ${c === 'Id' ? 'TEXT PRIMARY KEY' : c === 'SubscriptionEnabled' ? 'INTEGER NOT NULL DEFAULT 1' : c === 'TelegramCommunityUrl' ? "TEXT NOT NULL DEFAULT ''" : ['Enabled','Active','IsAvatar','LeadDays','Revision','Attempts','Sends','EmailVerified','IsAdmin','AccessGranted','RegistrationEnabled','DefaultActivationMonths'].includes(c) ? 'INTEGER' : 'TEXT'}`).join(',')})`);
       }
+      const settingsColumns = sqlite.prepare('PRAGMA table_info(SystemSettings)').all().map(row => row.name);
+      if (!settingsColumns.includes('SubscriptionEnabled')) sqlite.exec('ALTER TABLE SystemSettings ADD COLUMN SubscriptionEnabled INTEGER NOT NULL DEFAULT 1');
+      if (!settingsColumns.includes('TelegramCommunityUrl')) sqlite.exec("ALTER TABLE SystemSettings ADD COLUMN TelegramCommunityUrl TEXT NOT NULL DEFAULT ''");
       const employeeColumns = sqlite.prepare('PRAGMA table_info(Employees)').all().map(row => row.name);
-      for (const [column, definition] of Object.entries({ Username: 'TEXT', EmailVerified: 'INTEGER DEFAULT 1', IsAdmin: 'INTEGER DEFAULT 0', ActiveUntil: 'TEXT', AccessGranted: 'INTEGER DEFAULT 1' })) {
+      for (const [column, definition] of Object.entries({ Username: 'TEXT', EmailVerified: 'INTEGER DEFAULT 1', IsAdmin: 'INTEGER DEFAULT 0', ActiveUntil: 'TEXT', AccessGranted: 'INTEGER DEFAULT 1', UserCode: 'TEXT' })) {
         if (!employeeColumns.includes(column)) sqlite.exec(`ALTER TABLE Employees ADD COLUMN ${column} ${definition}`);
       }
       if (!employeeColumns.includes('AccessGranted')) sqlite.exec('UPDATE Employees SET Enabled=1, AccessGranted=0 WHERE Username IS NOT NULL AND Enabled=0 AND ActiveUntil IS NULL AND EmailVerified=1 AND IsAdmin=0');
       sqlite.exec('CREATE UNIQUE INDEX IF NOT EXISTS IX_Node_Employees_Username ON Employees(Username) WHERE Username IS NOT NULL; CREATE UNIQUE INDEX IF NOT EXISTS IX_Node_Registrations_Email ON Registrations(Email);');
       sqlite.exec('CREATE UNIQUE INDEX IF NOT EXISTS IX_Node_AnnouncementDismissals_User ON AnnouncementDismissals(EmployeeId, AnnouncementId);');
+      sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS IX_Node_Employees_UserCode ON Employees(UserCode) WHERE UserCode IS NOT NULL; CREATE UNIQUE INDEX IF NOT EXISTS IX_Node_Orders_Code ON PurchaseOrders(Code); CREATE UNIQUE INDEX IF NOT EXISTS IX_Node_Orders_Open ON PurchaseOrders(EmployeeId) WHERE State IN ('pending_payment','pending_review','rejected','payment_issue'); CREATE UNIQUE INDEX IF NOT EXISTS IX_Node_Orders_Reference ON PurchaseOrders(TransactionReference) WHERE TransactionReference IS NOT NULL; CREATE UNIQUE INDEX IF NOT EXISTS IX_Node_OrderPush_Unique ON OrderPushDeliveries(NotificationId,DeviceId);");
       // Review databases created by the old backend stored UTC ticks, not Unix milliseconds.
       // Convert only those columns; keep a consistent SQLite snapshot before changing saved data.
       const legacyColumns = Object.entries(tables).flatMap(([table, columns]) => columns.split(' ').filter(column => timeColumns.includes(column)).map(column => ({table,column})))
@@ -72,7 +82,7 @@ export class Database {
         sqlite.exec('PRAGMA foreign_keys=ON');
       }
       sqlite.exec('CREATE UNIQUE INDEX IF NOT EXISTS IX_Node_Employees_Email ON Employees(Email); CREATE UNIQUE INDEX IF NOT EXISTS IX_Node_Sessions_TokenHash ON Sessions(TokenHash); CREATE UNIQUE INDEX IF NOT EXISTS IX_Node_Deliveries_Unique ON Deliveries(OccurrenceId,DeviceId); CREATE UNIQUE INDEX IF NOT EXISTS IX_Node_Occurrences_Unique ON Occurrences(ReminderId,Revision,OriginalAt);');
-      return new Database(undefined, sqlite);
+      const db = new Database(undefined, sqlite); await assignUserCodes(db); return db;
     }
     const pool = await new sql.ConnectionPool(config.db).connect();
     pool.on('error', () => console.error('SQL connection pool error.'));
@@ -111,11 +121,15 @@ export class Database {
     return this.query(`SELECT ${select} FROM [${table}] WHERE ${where} ORDER BY ${order} ${this.sqlite ? 'LIMIT @pageLimit OFFSET @pageOffset' : 'OFFSET @pageOffset ROWS FETCH NEXT @pageLimit ROWS ONLY'}`, { ...params, pageOffset: offset, pageLimit: limit });
   }
   async one(table: Table, where: string, params: Params = {}) { return (await this.rows(table, where, params))[0]; }
+  async oneLocked(table: Table, where: string, params: Params = {}) {
+    if (!this.sqlite && !this.sqlTransaction) throw new Error('A write lock requires a transaction.');
+    return (await this.query(`SELECT * FROM [${table}]${this.sqlite ? '' : ' WITH (UPDLOCK, HOLDLOCK)'} WHERE ${where}`, params))[0];
+  }
   private fields(table: Table, data: Row) {
     return Object.entries(data).filter(([key]) => key !== 'rowVersion' && tables[table].split(' ').includes(key[0].toUpperCase() + key.slice(1)));
   }
   async insert(table: Table, data: Row) {
-    if (table === 'Employees') data = { emailVerified: true, isAdmin: false, accessGranted: true, ...data };
+    if (table === 'Employees') data = { emailVerified: true, isAdmin: false, accessGranted: true, ...data, userCode: data.userCode || await newUserCode(this) };
     const fields = this.fields(table, data); const params = Object.fromEntries(fields);
     if (table === 'Occurrences' && this.sqlite) { fields.push(['rowVersion', randomUUID()]); params.rowVersion = fields.at(-1)![1]; }
     await this.exec(`INSERT INTO [${table}] (${fields.map(([k]) => `[${k[0].toUpperCase() + k.slice(1)}]`).join(',')}) VALUES (${fields.map(([k]) => `@${k}`).join(',')})`, params);

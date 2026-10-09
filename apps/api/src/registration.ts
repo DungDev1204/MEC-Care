@@ -6,17 +6,15 @@ import type { Database, Row } from './db.js';
 import { hashPassword, verifyPassword } from './auth.js';
 import { HttpError, registerSchema, uuid } from './validation.js';
 import type { SendOtp } from './mail.js';
+import { settings } from './system-settings.js';
+export { settings } from './system-settings.js';
 
-export async function settings(db: Database) {
-  const row = await db.one('SystemSettings', 'Id=@id', { id: 'auth' });
-  return { registrationEnabled: row ? !!row.registrationEnabled : true, defaultActivationMonths: row ? Number(row.defaultActivationMonths) : 1 };
-}
 const uniqueConflict = (error: any) => [2601,2627].includes(error.number) || error.code?.startsWith('ERR_SQLITE') && error.message?.includes('UNIQUE constraint');
 const pendingValid = (pending: Row | undefined) => pending && Date.parse(pending.createdAt) + 30 * 60000 > Date.now();
 export function registrationRouter(db: Database, send: SendOtp) {
   const router = Router();
   router.use(rateLimit({ windowMs: 10 * 60000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false, message: { message: 'Bạn đã thử nhiều lần. Vui lòng chờ rồi thử lại.' } }));
-  router.get('/registration/config', async (_req, res) => { res.json({ registrationEnabled: (await settings(db)).registrationEnabled }); });
+  router.get('/registration/config', async (_req, res) => { const current = await settings(db); res.json({ registrationEnabled: current.registrationEnabled, subscriptionEnabled: current.subscriptionEnabled }); });
   router.post('/register', rateLimit({ windowMs: 10 * 60000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false, message: { message: 'Vui lòng chờ 10 phút trước khi đăng ký lại.' } }), async (req, res) => {
     if (!(await settings(db)).registrationEnabled) throw new HttpError(403, 'Đăng ký mới đang tạm đóng.');
     const input = registerSchema.parse(req.body);
@@ -71,7 +69,8 @@ export function registrationRouter(db: Database, send: SendOtp) {
       if (result === 'expired') throw new HttpError(400, 'Mã đã hết hạn hoặc hết lượt thử. Vui lòng gửi lại mã hoặc đăng ký lại.');
       if (result === 'wrong') throw new HttpError(400, 'Mã xác minh không đúng. Tối đa 5 lần thử.');
     } catch (error) { if (uniqueConflict(error)) throw new HttpError(409, 'Email hoặc username đã được sử dụng. Vui lòng đăng ký lại.'); throw error; }
-    res.status(201).json({ status: 'pendingActivation', message: 'Email đã được xác minh. Bạn có thể đăng nhập và đăng ký gói để sử dụng.' });
+    const subscriptionEnabled = (await settings(db)).subscriptionEnabled;
+    res.status(201).json({ status: 'pendingActivation', message: subscriptionEnabled ? 'Email đã được xác minh. Bạn có thể đăng nhập và đăng ký gói để sử dụng.' : 'Email đã được xác minh. Bạn có thể đăng nhập và sử dụng ứng dụng.' });
   });
   return router;
 }

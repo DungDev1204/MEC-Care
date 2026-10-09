@@ -1,0 +1,27 @@
+import { useEffect, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Search, RefreshCw, ReceiptText } from 'lucide-react';
+import { useLiveResource } from '../lib/live-resource';
+import { money, orderDate, orderLabels, paymentLabels, type Order } from '../lib/orders';
+import { OrderDetails } from '../components/OrderDetails';
+import { FormError, Loading } from '../components/ui';
+import { Subscription } from './Subscription';
+
+export function Orders({ admin = false }: { admin?: boolean }) {
+  const [params] = useSearchParams(); const initialSearch = admin ? params.get('order') || '' : '';
+  const [search, setSearch] = useState(initialSearch); const [query, setQuery] = useState(initialSearch); const [state, setState] = useState('');
+  const [payment, setPayment] = useState(''); const [from, setFrom] = useState(''); const [to, setTo] = useState(''); const [page, setPage] = useState(1);
+  const [selection, setSelection] = useState<string | null>(null);
+  const filters = new URLSearchParams({ search: query, state, page: String(page), ...(admin ? { paymentState: payment } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}) });
+  const resource = useLiveResource<{ orders: Order[]; total: number }>(`${admin ? '/api/admin' : '/api'}/orders?${filters}`, 10000);
+  useEffect(() => { const changed = () => resource.reload(); window.addEventListener('admin-orders-changed', changed); return () => window.removeEventListener('admin-orders-changed', changed); }, [resource.reload]);
+  useEffect(() => { if (admin && params.get('order')) { setSearch(params.get('order')!); setQuery(params.get('order')!); setPage(1); } }, [admin, params.get('order')]);
+  function searchOrders(event: FormEvent) { event.preventDefault(); setQuery(search.trim()); setPage(1); }
+  return <div className="orders-page">{!admin && <><header className="page-heading"><div><span className="eyebrow">CLIENTÉ / TÀI KHOẢN</span><h1>Đơn mua của tôi<span className="title-dot">.</span></h1><p>Gói sử dụng, thanh toán và lịch sử gia hạn trong một nơi.</p></div><ReceiptText size={30}/></header><Subscription embedded/></>}
+    <section className="panel orders-panel"><div className="orders-panel-heading"><div><h2>{admin ? 'Quản lý đơn hàng' : 'Lịch sử đơn mua'}</h2><p>{resource.data?.total || 0} đơn · Ngày giờ Việt Nam</p></div><button className="icon-button" aria-label="Tải lại đơn hàng" onClick={resource.reload}><RefreshCw size={18}/></button></div>
+      <form className="order-search" onSubmit={searchOrders}><label className="sr-only" htmlFor={admin ? 'admin-order-search' : 'user-order-search'}>Tìm đơn hàng</label><input id={admin ? 'admin-order-search' : 'user-order-search'} type="search" maxLength={100} placeholder={admin ? 'Tìm mã đơn, ID người dùng hoặc username…' : 'Tìm theo mã đơn…'} value={search} onChange={e => setSearch(e.target.value)}/><button className="button secondary"><Search size={17}/> Tìm kiếm</button></form>
+      <div className="order-filters"><label>Trạng thái đơn<select value={state} onChange={e => { setState(e.target.value); setPage(1); }}><option value="">Tất cả trạng thái</option>{Object.entries(orderLabels).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label>{admin && <label>Thanh toán<select value={payment} onChange={e => { setPayment(e.target.value); setPage(1); }}><option value="">Tất cả thanh toán</option>{Object.entries(paymentLabels).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label>}<label>Tạo từ ngày<input type="date" value={from} onChange={e => { setFrom(e.target.value); setPage(1); }}/></label><label>Đến ngày<input type="date" min={from || undefined} value={to} onChange={e => { setTo(e.target.value); setPage(1); }}/></label></div>
+      <FormError message={resource.error}/>{resource.loading ? <Loading/> : <><div className="admin-table-scroll"><table className="admin-table order-table"><thead><tr><th>Mã đơn / ID</th>{admin && <th>Username</th>}<th>Ngày tạo đơn</th><th>Ngày thanh toán</th><th>Trạng thái</th>{admin && <th>Thanh toán</th>}<th>Chi tiết</th></tr></thead><tbody>{resource.data?.orders.map(order => <tr key={order.id}><td><strong>{order.code}</strong><span>{order.userCode}</span></td>{admin && <td>{order.username}<small className="order-amount">{money(order.amount)} · {order.months} tháng</small></td>}<td>{orderDate(order.createdAt)}</td><td>{orderDate(order.paidAt)}</td><td><span className={`order-badge order-${order.state}`}>{orderLabels[order.state]}</span></td>{admin && <td><span className={`payment-state payment-${order.paymentState}`}>{paymentLabels[order.paymentState]}</span></td>}<td><button className="button small secondary" onClick={() => setSelection(order.id)}>Xem đơn</button></td></tr>)}</tbody></table></div>{!resource.data?.orders.length && <p className="admin-empty">Chưa có đơn phù hợp. Thử đổi từ khóa hoặc bộ lọc.</p>}<footer className="admin-pagination"><button className="button secondary" disabled={page <= 1} onClick={() => setPage(value => value - 1)}>Trang trước</button><span>Trang {page} / {Math.max(1, Math.ceil((resource.data?.total || 0) / 20))}</span><button className="button secondary" disabled={page * 20 >= (resource.data?.total || 0)} onClick={() => setPage(value => value + 1)}>Trang sau</button></footer></>}
+    </section>{selection && <OrderDetails id={selection} admin={admin} onClose={() => setSelection(null)} onChanged={resource.reload}/>}
+  </div>;
+}

@@ -6,6 +6,8 @@ import type { Database, Row } from './db.js';
 import type { Config } from './config.js';
 import { hash } from './auth.js';
 import { HttpError, generate } from './validation.js';
+import { runOrderNotifications } from './order-notifications.js';
+import { settings } from './system-settings.js';
 
 export function endpointAllowed(endpoint: string) {
   try { const u = new URL(endpoint); return endpoint.length <= 2048 && u.protocol === 'https:' && (!u.port || u.port === '443') && !u.username && !u.password && !u.hash &&
@@ -28,7 +30,10 @@ export function pushRouter(db: Database, config: Config) {
       const pushToken = hash(input.endpoint); const previous = await tx.one('Devices', 'PushToken=@hash', { hash: pushToken });
       const device = { ownerId: res.locals.user.id, sessionId: res.locals.user.sessionId, enabled: true, endpoint: input.endpoint, p256dh: input.keys.p256dh, authKey: input.keys.auth, pushToken };
       if (previous) {
-        if (previous.ownerId !== device.ownerId) await tx.remove('Deliveries', 'DeviceId=@id', { id: previous.id });
+        if (previous.ownerId !== device.ownerId) {
+          await tx.remove('Deliveries', 'DeviceId=@id', { id: previous.id });
+          await tx.remove('OrderPushDeliveries', 'DeviceId=@id', { id: previous.id });
+        }
         await tx.update('Devices', device, 'Id=@id', { id: previous.id });
       } else await tx.insert('Devices', { ...device, id: randomUUID() });
     }); res.sendStatus(204);
@@ -47,6 +52,8 @@ export function sender(config: Config): PushSender {
   };
 }
 export async function runCycle(db: Database, send: PushSender, now = new Date()) {
+  await runOrderNotifications(db, send, now);
+  const subscriptionEnabled = (await settings(db)).subscriptionEnabled;
   for (const reminder of await db.rows('Reminders', 'Active=@active AND Repeat=@repeat', { active: true, repeat: 'annual' })) {
     await db.transaction(async tx => {
       const existing = await tx.rows('Occurrences', 'ReminderId=@id AND Revision=@revision', { id: reminder.id, revision: reminder.revision });
@@ -55,9 +62,9 @@ export async function runCycle(db: Database, send: PushSender, now = new Date())
   }
   const ready = await db.query(`SELECT o.Id AS OccurrenceId, d.Id AS DeviceId FROM Occurrences o JOIN Reminders r ON r.Id=o.ReminderId
     JOIN Customers c ON c.Id=r.CustomerId JOIN Employees e ON e.Id=c.OwnerId JOIN Devices d ON d.OwnerId=c.OwnerId
-    WHERE o.State=@pending AND o.NotifyAt<=@now AND r.Active=@enabled AND e.Enabled=@enabled AND COALESCE(e.EmailVerified,1)=1 AND (e.IsAdmin=1 OR (COALESCE(e.AccessGranted,1)=1 AND (e.ActiveUntil IS NULL OR e.ActiveUntil>@now))) AND d.Enabled=@enabled AND d.Endpoint IS NOT NULL
+    WHERE o.State=@pending AND o.NotifyAt<=@now AND r.Active=@enabled AND e.Enabled=@enabled AND COALESCE(e.EmailVerified,1)=1 AND (@subscriptionEnabled=0 OR e.IsAdmin=1 OR (COALESCE(e.AccessGranted,1)=1 AND (e.ActiveUntil IS NULL OR e.ActiveUntil>@now))) AND d.Enabled=@enabled AND d.Endpoint IS NOT NULL
     AND EXISTS (SELECT 1 FROM Sessions s WHERE s.Id=d.SessionId AND s.EmployeeId=d.OwnerId AND s.ExpiresAt>@now)
-    AND NOT EXISTS (SELECT 1 FROM Deliveries j WHERE j.OccurrenceId=o.Id AND j.DeviceId=d.Id)`, { pending: 'pending', now, enabled: true });
+    AND NOT EXISTS (SELECT 1 FROM Deliveries j WHERE j.OccurrenceId=o.Id AND j.DeviceId=d.Id)`, { pending: 'pending', now, enabled: true, subscriptionEnabled });
   for (const job of ready.slice(0,100)) await db.transaction(async tx => {
     if (!await tx.one('Deliveries', 'OccurrenceId=@occurrenceId AND DeviceId=@deviceId', job)) await tx.insert('Deliveries', { id: randomUUID(), ...job, state: 'pending', attempts: 0, retryAt: now, leaseUntil: null, receiptId: null });
   });
@@ -66,8 +73,8 @@ export async function runCycle(db: Database, send: PushSender, now = new Date())
     if (!await db.update('Deliveries', { leaseUntil: new Date(now.getTime()+120000) }, 'Id=@id AND State=@pending AND (LeaseUntil IS NULL OR LeaseUntil<@now)', { id: job.id, pending: 'pending', now })) continue;
     const current = await db.query(`SELECT d.*, c.Id AS CustomerId FROM Devices d JOIN Customers c ON c.OwnerId=d.OwnerId
       JOIN Reminders r ON r.CustomerId=c.Id JOIN Occurrences o ON o.ReminderId=r.Id JOIN Employees e ON e.Id=c.OwnerId
-      WHERE d.Id=@deviceId AND o.Id=@occurrenceId AND o.State=@pending AND o.NotifyAt<=@now AND d.Enabled=@enabled AND r.Active=@enabled AND e.Enabled=@enabled AND COALESCE(e.EmailVerified,1)=1 AND (e.IsAdmin=1 OR (COALESCE(e.AccessGranted,1)=1 AND (e.ActiveUntil IS NULL OR e.ActiveUntil>@now)))
-      AND EXISTS (SELECT 1 FROM Sessions s WHERE s.Id=d.SessionId AND s.EmployeeId=d.OwnerId AND s.ExpiresAt>@now)`, { deviceId: job.deviceId, occurrenceId: job.occurrenceId, pending: 'pending', now: new Date(), enabled: true });
+      WHERE d.Id=@deviceId AND o.Id=@occurrenceId AND o.State=@pending AND o.NotifyAt<=@now AND d.Enabled=@enabled AND r.Active=@enabled AND e.Enabled=@enabled AND COALESCE(e.EmailVerified,1)=1 AND (@subscriptionEnabled=0 OR e.IsAdmin=1 OR (COALESCE(e.AccessGranted,1)=1 AND (e.ActiveUntil IS NULL OR e.ActiveUntil>@now)))
+      AND EXISTS (SELECT 1 FROM Sessions s WHERE s.Id=d.SessionId AND s.EmployeeId=d.OwnerId AND s.ExpiresAt>@now)`, { deviceId: job.deviceId, occurrenceId: job.occurrenceId, pending: 'pending', now: new Date(), enabled: true, subscriptionEnabled: (await settings(db)).subscriptionEnabled });
     const device = current[0]; const updates: Row = { leaseUntil: null };
     if (!device?.endpoint) updates.state = 'cancelled';
     else {

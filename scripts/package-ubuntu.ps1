@@ -12,15 +12,22 @@ try {
         Copy-Item -LiteralPath (Join-Path $nodePackageRoot ('apps/api/' + $nodePackageItem)) -Destination $nodePackageOutput -Recurse
     }
     Copy-Item -LiteralPath (Join-Path $nodePackageRoot 'deploy/ubuntu') -Destination (Join-Path $nodePackageOutput 'deployment') -Recurse
+    # Git on Windows may have checked scripts out with CRLF. Ubuntu requires LF and no BOM.
+    foreach ($nodePackageShellFile in Get-ChildItem -LiteralPath (Join-Path $nodePackageOutput 'deployment') -Filter '*.sh' -File -Recurse) {
+        $nodePackageShellText = [IO.File]::ReadAllText($nodePackageShellFile.FullName).Replace("`r`n", "`n").Replace("`r", "`n")
+        [IO.File]::WriteAllText($nodePackageShellFile.FullName, $nodePackageShellText, [Text.UTF8Encoding]::new($false))
+    }
     Copy-Item -LiteralPath (Join-Path $nodePackageRoot 'docs/deploy-ubuntu.md') -Destination (Join-Path $nodePackageOutput 'deployment/deploy-ubuntu.md')
     Copy-Item -LiteralPath (Join-Path $nodePackageRoot 'docs/registration-admin.md') -Destination (Join-Path $nodePackageOutput 'deployment/registration-admin.md')
     Copy-Item -LiteralPath (Join-Path $nodePackageRoot 'docs/auth-migration.sql') -Destination (Join-Path $nodePackageOutput 'deployment/auth-migration.sql')
     $nodePackageSchema = "USE [MEC];`nGO`n" + [IO.File]::ReadAllText((Join-Path $nodePackageRoot 'docs/database.sql'))
     [IO.File]::WriteAllText((Join-Path $nodePackageOutput 'deployment/schema-mec.sql'),$nodePackageSchema,[Text.UTF8Encoding]::new($false))
     if (Test-Path -LiteralPath (Join-Path $nodePackageOutput '.env')) { throw 'Private .env must not be packaged.' }
-    $nodePackageArchive = Join-Path $nodePackageRoot 'artifacts/cliente-node.tar.gz'
+    $nodePackageArchive = Join-Path $nodePackageRoot ('artifacts/cliente-release-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ') + '.tar.gz')
     tar -czf $nodePackageArchive -C $nodePackageOutput .
     if ($LASTEXITCODE -ne 0) { throw 'Archive creation failed.' }
+    node (Join-Path $PSScriptRoot 'verify-ubuntu-package.mjs') $nodePackageArchive
+    if ($LASTEXITCODE -ne 0) { throw 'Ubuntu package verification failed.' }
     Write-Host "Node.js package: $nodePackageArchive"
 } finally {
     Set-Location $nodePackagePrevious

@@ -4,8 +4,6 @@ import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import { ZodError } from 'zod';
 import multer from 'multer';
-import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
 import type { Config } from './config.js';
 import type { Database } from './db.js';
@@ -15,11 +13,14 @@ import { registrationRouter } from './registration.js';
 import { otpSender, type SendOtp } from './mail.js';
 import { adminRouter } from './admin.js';
 import { subscriptionRouter } from './subscription.js';
+import { ordersRouter } from './orders.js';
 import { announcementRouter } from './announcements.js';
+import { communityRouter } from './community.js';
 import { customersRouter } from './customers.js';
 import { careRouter } from './care.js';
 import { accountRouter } from './account.js';
 import { pushRouter } from './push.js';
+import { isAdminApp, isAdminPage, pwaRouter, appHtml } from './pwa.js';
 
 export function createApp(db: Database, config: Config, sendOtp: SendOtp = otpSender(config)) {
   const app = express(); app.disable('x-powered-by'); if (config.trustLocalProxy) app.set('trust proxy', 'loopback');
@@ -58,23 +59,28 @@ export function createApp(db: Database, config: Config, sendOtp: SendOtp = otpSe
     if (!user || !await verifyPassword(input.password, user.passwordHash)) { if (!user) await hashPassword(input.password); throw new HttpError(401, 'Username hoặc mật khẩu không đúng.'); }
     if (user.emailVerified === false) throw new HttpError(403, 'Email chưa được xác minh.');
     if (!user.enabled) throw new HttpError(403, 'Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.');
+    if (isAdminApp(req, config) && !user.isAdmin) throw new HttpError(403, 'Clienté Admin chỉ dành cho quản trị viên. Hãy đăng nhập tại ứng dụng Clienté dành cho người dùng.');
     if (!user.passwordHash.startsWith('scrypt$')) await db.update('Employees', { passwordHash: await hashPassword(input.password) }, 'Id=@id', { id: user.id });
     res.json(await startSession(db,req,res,user,config));
   });
   const api = Router(); api.use(authenticate(db)); api.use(requireUser);
-  api.get('/session', (_req, res) => { res.json(sessionInfo(res.locals.user)); });
+  api.use((req, _res, next) => { if (isAdminApp(req, config) && !_res.locals.user.isAdmin) { next(new HttpError(403, 'Clienté Admin chỉ dành cho quản trị viên.')); return; } next(); });
+  api.get('/session', (_req, res) => { res.json(sessionInfo(res.locals.user, res.locals.subscriptionEnabled)); });
   api.post('/logout', async (req, res) => {
     await db.transaction(async tx => {
       const session = await tx.one('Sessions', 'TokenHash=@hash AND EmployeeId=@owner', { hash: hash(token(req)), owner: res.locals.user.id });
       if (session) { await tx.update('Devices', { enabled: false }, 'SessionId=@id', { id: session.id }); await tx.update('Sessions', { expiresAt: new Date() }, 'Id=@id', { id: session.id }); }
     }); res.clearCookie(cookieName, { httpOnly: true, secure: config.environment !== 'Development', sameSite: 'strict', path: '/' }); res.sendStatus(204);
   });
-  api.use(adminRouter(db,config)); api.use(subscriptionRouter(db)); api.use(announcementRouter(db));
+  api.use(adminRouter(db,config)); api.use(subscriptionRouter(db)); api.use(ordersRouter(db)); api.use(announcementRouter(db)); api.use(communityRouter(db));
   api.use('/account/backup', requireActive); api.use(accountRouter(db,config));
   api.use(requireActive); api.use(customersRouter(db,config)); api.use(careRouter(db)); api.use(pushRouter(db,config)); app.use('/api', api);
   app.use(['/api','/auth'], (_req, res) => { res.sendStatus(404); });
-  app.use(express.static(config.webRoot, { setHeaders: (res, file) => { if (['index.html','sw.js'].includes(path.basename(file))) res.setHeader('Cache-Control','no-cache'); } }));
-  app.get('/{*path}', (_req, res) => { const index = path.join(config.webRoot,'index.html'); if (fs.existsSync(index)) { res.set('Cache-Control','no-cache'); res.sendFile(index); } else res.sendStatus(404); });
+  app.use(pwaRouter(config));
+  const sendApp = (req: express.Request, res: express.Response) => { const html = appHtml(config, isAdminApp(req, config), isAdminPage(req, config)); if (html !== null) res.set('Cache-Control','no-cache').type('html').send(html); else res.sendStatus(404); };
+  app.get(['/','/index.html'], sendApp);
+  app.use(express.static(config.webRoot, { index: false }));
+  app.get('/{*path}', sendApp);
   const onError: ErrorRequestHandler = (error, _req, res, next) => {
     if (res.headersSent) { next(error); return; }
     if (error instanceof HttpError) { res.status(error.status).json({ message: error.message, ...error.extra }); return; }

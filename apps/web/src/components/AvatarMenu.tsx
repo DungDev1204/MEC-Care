@@ -1,12 +1,13 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronRight, LogOut, Settings, ShieldCheck, UserRound } from 'lucide-react';
+import { ChevronRight, LogOut, Settings, ShieldCheck, UserRound, ReceiptText } from 'lucide-react';
 import { useSession } from '../session';
 import { Avatar } from './ui';
 
 const sections = [
   { label: 'Thông tin cá nhân', path: '/account', icon: UserRound },
+  { label: 'Đơn mua của tôi', path: '/orders', icon: ReceiptText },
   { label: 'Cài đặt', path: '/account/settings', icon: Settings },
   { label: 'Cài đặt nâng cao', path: '/account/advanced', icon: ShieldCheck },
 ];

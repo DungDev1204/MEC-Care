@@ -30,7 +30,17 @@ IF OBJECT_ID('dbo.Registrations','U') IS NULL CREATE TABLE dbo.Registrations (
 GO
 
 IF OBJECT_ID('dbo.SystemSettings','U') IS NULL CREATE TABLE dbo.SystemSettings (
-    Id nvarchar(32) NOT NULL PRIMARY KEY, RegistrationEnabled bit NOT NULL, DefaultActivationMonths int NOT NULL);
+    Id nvarchar(32) NOT NULL PRIMARY KEY, RegistrationEnabled bit NOT NULL, DefaultActivationMonths int NOT NULL,
+    SubscriptionEnabled bit NOT NULL CONSTRAINT DF_SystemSettings_SubscriptionEnabled DEFAULT 1,
+    TelegramCommunityUrl nvarchar(300) NOT NULL CONSTRAINT DF_SystemSettings_TelegramCommunityUrl DEFAULT N'');
+GO
+
+IF COL_LENGTH('dbo.SystemSettings','SubscriptionEnabled') IS NULL ALTER TABLE dbo.SystemSettings
+    ADD SubscriptionEnabled bit NOT NULL CONSTRAINT DF_SystemSettings_SubscriptionEnabled DEFAULT 1;
+GO
+
+IF COL_LENGTH('dbo.SystemSettings','TelegramCommunityUrl') IS NULL ALTER TABLE dbo.SystemSettings
+    ADD TelegramCommunityUrl nvarchar(300) NOT NULL CONSTRAINT DF_SystemSettings_TelegramCommunityUrl DEFAULT N'';
 GO
 
 IF OBJECT_ID('dbo.AdminAudit','U') IS NULL CREATE TABLE dbo.AdminAudit (

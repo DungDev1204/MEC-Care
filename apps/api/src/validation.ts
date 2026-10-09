@@ -31,7 +31,9 @@ export const reminderSchema = z.object({ kind: z.enum(['birthday','afterPurchase
       if (time.toMillis() <= Date.now()) ctx.addIssue({ code: 'custom', path: ['localDateTime'], message: 'Chọn ngày giờ trong tương lai.' });
       if (r.repeat === 'annual' && time.month === 2 && time.day === 29 && !r.leapDayPolicy) ctx.addIssue({ code: 'custom', path: ['leapDayPolicy'], message: 'Chọn quy tắc 29/02.' });
     } catch (error) { ctx.addIssue({ code: 'custom', path: ['localDateTime'], message: (error as Error).message }); }
-  });
+  })
+  // datetime-local inputs send minute precision; SQL Server datetime2 requires seconds with ISO's T separator.
+  .transform(r => ({ ...r, localDateTime: r.localDateTime.length === 16 ? `${r.localDateTime}:00` : r.localDateTime }));
 export const registerSchema = z.object({ username: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,32}$/, 'Username cần 3–32 ký tự: chữ không dấu, số hoặc dấu gạch dưới.'), email: z.string().trim().toLowerCase().pipe(z.email().max(254)), password: z.string().min(6, 'Mật khẩu cần ít nhất 6 ký tự.').max(256) });
 const loginIdentifier = z.string().trim().toLowerCase().min(1, 'Nhập username.').max(254);
 export const loginSchema = z.object({ username: loginIdentifier.optional(), email: loginIdentifier.optional(), password: z.string().min(1, 'Nhập mật khẩu.').max(256) })

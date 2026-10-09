@@ -12,3 +12,7 @@ export function age(birth?: string | null, at = today()) { if (!birth) return nu
 export const initials = (name: string) => name.split(' · ')[0].split(/\s+/).filter(Boolean).slice(-2).map(s => s[0]).join('').toUpperCase();
 export const relativeContact = (date?: string | null) => { if (!date) return 'Chưa liên hệ'; const days = Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 86400000)); return days === 0 ? 'Hôm nay' : days === 1 ? 'Hôm qua' : `${days} ngày trước`; };
 export const safeReturn = (value: string | null) => value?.startsWith('/') && !value.startsWith('//') && !/[\\\u0000-\u001f\u007f]/.test(value) && !value.startsWith('/login') && !value.startsWith('/register') ? value : '/';
+export function loginDestination(session: { isAdmin: boolean; canUseApp: boolean }, target: string | null) {
+  if (!session.isAdmin && !session.canUseApp) return '/subscription';
+  return target ? safeReturn(target) : session.isAdmin ? '/admin' : '/';
+}

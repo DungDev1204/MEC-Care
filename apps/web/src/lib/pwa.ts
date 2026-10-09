@@ -1,4 +1,5 @@
 import { post, request } from './api';
+import { appName } from './app-mode';
 export type PushConfig = { enabled: boolean; publicKey: string | null };
 export const isInstalled = () => window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
 export const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
@@ -10,7 +11,7 @@ export async function serviceWorker() {
 }
 export async function enablePush(config: PushConfig) {
   if (!config.enabled || !config.publicKey) throw new Error('Thông báo chưa được bật cho môi trường này. Lịch chăm sóc vẫn được lưu.');
-  if (isIOS() && !isInstalled()) throw new Error('Trên iPhone, thêm Clienté vào Màn hình chính bằng Safari, rồi mở từ biểu tượng để bật thông báo.');
+  if (isIOS() && !isInstalled()) throw new Error(`Trên iPhone, thêm ${appName()} vào Màn hình chính bằng Safari, rồi mở từ biểu tượng để bật thông báo.`);
   if (!pushSupported()) throw new Error('Hãy mở bằng Safari trên iPhone hoặc Chrome/Samsung Internet qua HTTPS.');
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') throw new Error('Chưa được cấp quyền thông báo. Bạn có thể bật lại trong cài đặt trình duyệt.');
@@ -27,6 +28,8 @@ export async function syncPush() {
 }
 export type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 let installPrompt: InstallPrompt | undefined;
-export const getInstallPrompt = () => installPrompt;
-export function captureInstallPrompt(event: Event) { event.preventDefault(); installPrompt = event as InstallPrompt; window.dispatchEvent(new Event('install-prompt-ready')); }
-export function clearInstallPrompt() { installPrompt = undefined; }
+let installPromptManifest = '';
+const currentManifest = () => document.querySelector<HTMLLinkElement>('link[rel="manifest"]')?.href || '';
+export const getInstallPrompt = () => installPromptManifest === currentManifest() ? installPrompt : undefined;
+export function captureInstallPrompt(event: Event) { event.preventDefault(); installPrompt = event as InstallPrompt; installPromptManifest = currentManifest(); window.dispatchEvent(new Event('install-prompt-ready')); }
+export function clearInstallPrompt() { installPrompt = undefined; installPromptManifest = ''; window.dispatchEvent(new Event('install-prompt-ready')); }

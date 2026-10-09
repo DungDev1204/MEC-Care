@@ -1,4 +1,6 @@
 import type { Database } from './db.js';
+import { commerceMigration } from './commerce-schema.js';
+import { assignUserCodes } from './user-code.js';
 
 // Explicit, additive migration. Existing passwords, access and data remain intact.
 export const authMigration = [
@@ -16,7 +18,11 @@ export const authMigration = [
     PasswordHash nvarchar(256) NOT NULL, CodeHash nvarchar(256) NOT NULL, ExpiresAt datetimeoffset NOT NULL,
     CreatedAt datetimeoffset NOT NULL, SentAt datetimeoffset NOT NULL, Attempts int NOT NULL, Sends int NOT NULL)`,
   `IF OBJECT_ID('dbo.SystemSettings','U') IS NULL CREATE TABLE dbo.SystemSettings (
-    Id nvarchar(32) NOT NULL PRIMARY KEY, RegistrationEnabled bit NOT NULL, DefaultActivationMonths int NOT NULL)`,
+    Id nvarchar(32) NOT NULL PRIMARY KEY, RegistrationEnabled bit NOT NULL, DefaultActivationMonths int NOT NULL,
+    SubscriptionEnabled bit NOT NULL CONSTRAINT DF_SystemSettings_SubscriptionEnabled DEFAULT 1,
+    TelegramCommunityUrl nvarchar(300) NOT NULL CONSTRAINT DF_SystemSettings_TelegramCommunityUrl DEFAULT N'')`,
+  `IF COL_LENGTH('dbo.SystemSettings','SubscriptionEnabled') IS NULL ALTER TABLE dbo.SystemSettings ADD SubscriptionEnabled bit NOT NULL CONSTRAINT DF_SystemSettings_SubscriptionEnabled DEFAULT 1`,
+  `IF COL_LENGTH('dbo.SystemSettings','TelegramCommunityUrl') IS NULL ALTER TABLE dbo.SystemSettings ADD TelegramCommunityUrl nvarchar(300) NOT NULL CONSTRAINT DF_SystemSettings_TelegramCommunityUrl DEFAULT N''`,
   `IF OBJECT_ID('dbo.AdminAudit','U') IS NULL CREATE TABLE dbo.AdminAudit (
     Id uniqueidentifier NOT NULL PRIMARY KEY, ActorId uniqueidentifier NOT NULL, TargetId uniqueidentifier NULL,
     Action nvarchar(32) NOT NULL, CreatedAt datetimeoffset NOT NULL, Details nvarchar(max) NOT NULL)`,
@@ -36,10 +42,11 @@ export const authMigration = [
     CONSTRAINT FK_AnnouncementDismissals_Employees FOREIGN KEY (EmployeeId) REFERENCES dbo.Employees(Id),
     CONSTRAINT UQ_AnnouncementDismissals_User UNIQUE (EmployeeId, AnnouncementId))`,
   `IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_Announcements_Window' AND object_id=OBJECT_ID('dbo.Announcements')) CREATE INDEX IX_Announcements_Window ON dbo.Announcements(Enabled, StartsAt, EndsAt)`,
-  `UPDATE dbo.Employees SET IsAdmin=1, EmailVerified=1 WHERE LOWER(LTRIM(RTRIM(Email)))='admin@admin.com' AND Enabled=1`
+  `UPDATE dbo.Employees SET IsAdmin=1, EmailVerified=1 WHERE LOWER(LTRIM(RTRIM(Email)))='admin@admin.com' AND Enabled=1`,
+  ...commerceMigration
 ];
 export async function migrateAuth(db: Database) {
-  await db.transaction(async tx => { for (const statement of authMigration) await tx.exec(statement); await assignLegacyUsernames(tx); });
+  await db.transaction(async tx => { for (const statement of authMigration) await tx.exec(statement); await assignLegacyUsernames(tx); await assignUserCodes(tx); });
   const admin = await db.one('Employees', 'Email=@email', { email: 'admin@admin.com' });
   console.log('Authentication schema migration complete.');
   console.log(admin?.isAdmin ? 'Existing administrator account promoted; password preserved.' : 'No active admin@admin.com account found; no administrator was created.');

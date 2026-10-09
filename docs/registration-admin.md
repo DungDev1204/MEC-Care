@@ -2,9 +2,9 @@
 
 Trang người dùng: `/register`, `/login`. Trang admin: `/admin` tại `https://care.tranie-mua.io.vn/admin`. Người dùng đã chọn giữ domain đang hoạt động này khi triển khai.
 
-Luồng đăng ký: username 3–32 ký tự (chữ không dấu, số, `_`), email và mật khẩu ít nhất 6 ký tự → gửi OTP 6 số ngẫu nhiên → xác minh email → đăng nhập bằng username → trang chủ hiển thị đăng ký gói. Email dùng để xác minh tài khoản. OTP có hạn 10 phút, tối đa 5 lần thử; gửi lại cách nhau ít nhất 60 giây và không đặt lại số lượt thử. Phiên đăng ký hết hạn sau 30 phút, tối đa 5 lần gửi. Không trả OTP, password hash hoặc SMTP password qua API.
+Luồng đăng ký: username 3–32 ký tự (chữ không dấu, số, `_`), email và mật khẩu ít nhất 6 ký tự → gửi OTP 6 số ngẫu nhiên → xác minh email → đăng nhập bằng username → đăng ký gói nếu admin đang bật yêu cầu gói, hoặc sử dụng ngay nếu đang tắt. Email dùng để xác minh tài khoản. OTP có hạn 10 phút, tối đa 5 lần thử; gửi lại cách nhau ít nhất 60 giây và không đặt lại số lượt thử. Phiên đăng ký hết hạn sau 30 phút, tối đa 5 lần gửi. Không trả OTP, password hash hoặc SMTP password qua API.
 
-Tài khoản đã xác minh có thể đăng nhập, cập nhật thông tin cá nhân và gửi yêu cầu đăng ký gói 1 tháng. Yêu cầu được lưu một lần và hiển thị cho admin. Chỉ tài khoản có quyền sử dụng còn hạn mới được truy cập khách hàng, ảnh, lịch chăm sóc, xuất dữ liệu và Web Push. Hết hạn vẫn đăng nhập được để gửi yêu cầu gia hạn. Sau khi admin kích hoạt, người dùng bấm “Kiểm tra gói” để sử dụng ngay trong phiên hiện tại.
+Tài khoản đã xác minh có thể đăng nhập và cập nhật thông tin cá nhân. Khi yêu cầu gói đang bật, người dùng có thể đăng ký gói 1 tháng; yêu cầu được lưu một lần và hiển thị cho admin. Chỉ tài khoản có quyền sử dụng còn hạn mới được truy cập khách hàng, ảnh, lịch chăm sóc, xuất dữ liệu và Web Push ở chế độ này. Hết hạn vẫn đăng nhập được để gia hạn. Sau khi admin kích hoạt, quyền mới tự cập nhật trong phiên hiện tại; người dùng cũng có thể bấm “Kiểm tra gói”.
 
 Admin kích hoạt mặc định 1 tháng, có thể chọn 1–12 tháng. Gia hạn cộng từ ngày hết hạn nếu còn hạn, hoặc từ thời điểm hiện tại nếu đã hết hạn. Tháng được tính theo lịch, xử lý đúng ngày cuối tháng. Khóa tài khoản kết thúc mọi phiên, chặn đăng nhập và tắt các thiết bị thông báo.
 
@@ -12,7 +12,25 @@ Tài khoản cũ giữ mật khẩu và quyền truy cập hiện có; chưa áp
 
 Sau khi admin kích hoạt/gia hạn một tài khoản cũ, thời hạn bắt đầu được áp dụng. Script nâng cấp cấp quyền admin cho **tài khoản `admin@admin.com` đang hoạt động**, không tạo tài khoản hay đổi mật khẩu. Đăng ký công khai không được dùng địa chỉ này hoặc tự cấp quyền admin.
 
-Admin có tìm kiếm/phân trang người dùng, kích hoạt/gia hạn/khóa, bật/tắt đăng ký và cài thời hạn mặc định. Thao tác được ghi vào `AdminAudit`. Cấu hình SMTP và Push vẫn nằm trong `.env` trên máy chủ. Chưa có thanh toán tự động, phục hồi mật khẩu hoặc thu tiền định kỳ.
+Admin có tìm kiếm/phân trang người dùng, kích hoạt/gia hạn/khóa, bật/tắt đăng ký tài khoản, quản lý yêu cầu gói và cài thời hạn mặc định. Thao tác được ghi vào `AdminAudit`. Cấu hình SMTP và Push vẫn nằm trong `.env` trên máy chủ. Chưa có thanh toán tự động, phục hồi mật khẩu hoặc thu tiền định kỳ.
+
+## Bật/tắt yêu cầu gói đăng ký
+
+Mở `/admin?tab=subscription`, chọn mục **Gói đăng ký**, thay đổi công tắc **Yêu cầu đăng ký gói để sử dụng**, rồi bấm **Lưu cài đặt gói**. Khi nâng cấp, mặc định giữ chế độ bật như bản hiện tại; admin có thể tắt để mở ứng dụng cho mọi tài khoản đang hoạt động và đã xác minh email.
+
+- **Tắt:** người dùng chưa có gói hoặc đã hết hạn vẫn dùng khách hàng, ảnh, lịch chăm sóc, xuất dữ liệu và Web Push bình thường. Không tạo đơn mua gói mới; các đơn đã tạo vẫn xem, báo thanh toán và được admin xử lý.
+- **Bật:** tài khoản chưa có gói hoặc đã hết hạn cần đăng ký/gia hạn để tiếp tục. Tài khoản đang có gói còn hạn, admin và tài khoản cũ có quyền không giới hạn vẫn sử dụng bình thường.
+- Chuyển chế độ chỉ thay đổi yêu cầu truy cập, giữ nguyên các gói đã cấp, ngày hết hạn, dữ liệu và phiên đăng nhập. Thời hạn gói vẫn tính theo ngày hết hạn đã lưu. Tài khoản bị khóa hoặc chưa xác minh email vẫn bị chặn.
+
+Cài đặt được lưu trong `SystemSettings.SubscriptionEnabled`, có hiệu lực ở API ngay từ yêu cầu tiếp theo. Giao diện tự kiểm tra phiên mỗi 10 giây khi đang mở và khi quay lại ứng dụng. Cài đặt này độc lập với bật/tắt đăng ký tài khoản mới. Mỗi thay đổi gói được ghi vào `AdminAudit` với action `subscription_settings`; cần migration `--migrate-auth` trước khi chạy bản mới trên SQL Server.
+
+## Liên hệ admin và cộng đồng Telegram
+
+Mục **Thanh toán** có trường **Đường dẫn liên hệ admin**, nhận đường dẫn HTTPS và không bắt buộc chọn dịch vụ liên hệ cụ thể. Người dùng thấy nút **Liên hệ với admin** trong các đơn cần hỗ trợ; hướng dẫn chờ đối soát nhắc cung cấp mã đơn. Để trống đường dẫn thì ẩn nút liên hệ. Các đơn đã tạo giữ nguyên đường dẫn hỗ trợ đã lưu cùng thông tin thanh toán.
+
+Mở `/admin?tab=community`, vào mục **Cộng đồng** để nhập đường dẫn Telegram rồi bấm **Lưu đường dẫn cộng đồng**. Chấp nhận đường dẫn nhóm `https://t.me/ten_nhom` hoặc lời mời `https://t.me/+ma_moi`, `https://t.me/joinchat/ma_moi`. Khi có cấu hình, cuối trang người dùng hiển thị icon Telegram và dòng **Tham gia góp ý phát triển Clienté**, mở cộng đồng trong tab mới. Người dùng chưa có gói hoặc đã hết hạn cũng có thể tham gia. Xóa đường dẫn và lưu để ẩn nút.
+
+Đường dẫn được lưu ở `SystemSettings.TelegramCommunityUrl`, mặc định trống và độc lập với cấu hình thanh toán, đăng ký tài khoản và yêu cầu gói. Cần migration bổ sung trước khi chạy bản mới trên SQL Server. Giao diện người dùng kiểm tra lại đường dẫn mỗi 30 giây và khi quay lại tab; thay đổi cộng đồng không sửa các đơn mua hoặc gói đã cấp.
 
 ## Thông báo toàn thể người dùng
 

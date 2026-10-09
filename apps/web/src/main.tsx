@@ -9,6 +9,7 @@ import '@fontsource/be-vietnam-pro/vietnamese-600.css';
 import '@fontsource/cormorant-garamond/latin-500.css';
 import '@fontsource/cormorant-garamond/vietnamese-500.css';
 import './styles.css';
+import './orders.css';
 import App from './App';
 import { ToastProvider } from './lib/hooks';
 import { ConfirmationProvider } from './components/confirmation';

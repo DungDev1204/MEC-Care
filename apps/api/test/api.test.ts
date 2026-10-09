@@ -80,6 +80,31 @@ test('care records complete the correct occurrence atomically and preserve owner
     assert.equal((await request(f.app).delete(`/api/reminders/${r.body.id}`).set('Authorization',`Bearer ${a}`)).status,204);
   }finally{await f.close();}
 });
+test('minute-precision phone reminders are normalized for SQL Server on creation, editing and follow-up',async()=>{
+  const f=await fixture();try{
+    const token=(await register(f.app,'alice')).body.token;
+    const post=(url:string,data:any)=>request(f.app).post(url).set('Authorization',`Bearer ${token}`).send(data);
+    const c=(await post('/api/customers',customer)).body;
+    const input={...reminder(),kind:'consulting',leadDays:0,localDateTime:DateTime.now().setZone('Asia/Ho_Chi_Minh').plus({days:5}).toFormat("yyyy-MM-dd'T'HH:mm")};
+    const created=await post(`/api/customers/${c.id}/reminders`,input);
+    assert.equal(created.status,200);assert.equal(created.body.localDateTime,input.localDateTime+':00');
+    const occurrence=(await f.db.rows('Occurrences','ReminderId=@id',{id:created.body.id}))[0];
+    assert.equal(occurrence.scheduledAt,localTime(input.localDateTime,input.timeZone).toUTC().toISO());
+    assert.equal(occurrence.notifyAt,occurrence.scheduledAt);
+    const editedInput={...input,repeat:'annual',localDateTime:DateTime.now().setZone('Asia/Ho_Chi_Minh').plus({days:6}).toFormat("yyyy-MM-dd'T'HH:mm")};
+    const edited=await request(f.app).put(`/api/reminders/${created.body.id}`).set('Authorization',`Bearer ${token}`).send(editedInput);
+    assert.equal(edited.status,200);assert.equal(edited.body.localDateTime,editedInput.localDateTime+':00');
+    const care=await post(`/api/customers/${c.id}/contacts`,{at:new Date().toISOString(),channel:'call',content:'Lịch tiếp theo',nextReminder:input});
+    assert.equal(care.status,200);
+    assert.ok((await f.db.rows('Reminders')).every(r=>r.localDateTime.length>=19));
+    const before=(await f.db.rows('Reminders')).length;
+    const past={...input,localDateTime:DateTime.now().setZone('Asia/Ho_Chi_Minh').minus({minutes:1}).toFormat("yyyy-MM-dd'T'HH:mm")};
+    const invalid=await post(`/api/customers/${c.id}/reminders`,past);
+    assert.equal(invalid.status,400);assert.ok(invalid.body.errors.localDateTime.some((message:string)=>message.includes('tương lai')));
+    assert.equal((await f.db.rows('Reminders')).length,before);
+  }finally{await f.close();}
+});
+
 test('photos and backup files are protected, and avatar replacement cleans storage',async()=>{
   const f=await fixture();try{
     const a=(await register(f.app,'alice')).body.token,b=(await register(f.app,'bob')).body.token;

@@ -22,12 +22,20 @@ export function readConfig(envFile = process.env.CLIENTE_ENV_FILE || '.env', ove
   if (review && environment !== 'Development') throw new Error('Review is available only in Development.');
   const bindAddress = get('BIND_ADDRESS', '127.0.0.1');
   if (!net.isIP(bindAddress)) throw new Error('BIND_ADDRESS must be an IP address.');
+  const appOrigin = (key: string) => {
+    const value = get(key).trim(); if (!value) return '';
+    const url = new URL(value);
+    if (!/^[a-z0-9][a-z0-9.-]*$/i.test(url.hostname) || url.username || url.password || url.search || url.hash || url.pathname !== '/' || !['http:', 'https:'].includes(url.protocol) || environment === 'Production' && url.protocol !== 'https:') throw new Error(`${key} must be an HTTPS origin without a path.`);
+    return url.origin;
+  };
+  const apps = { adminUrl: appOrigin('ADMIN_APP_URL'), userUrl: appOrigin('USER_APP_URL') };
+  if (!!apps.adminUrl !== !!apps.userUrl || apps.adminUrl && new URL(apps.adminUrl).hostname === new URL(apps.userUrl).hostname) throw new Error('Set ADMIN_APP_URL and USER_APP_URL with separate hostnames.');
   const db = { server: get('DB_SERVER'), port: integer('DB_PORT', 1433), database: get('DB_NAME'), user: get('DB_USER'), password: get('DB_PASSWORD'),
     options: { encrypt: boolean('DB_ENCRYPT', true), trustServerCertificate: boolean('DB_TRUST_SERVER_CERTIFICATE', false), useUTC: true, ...(get('DB_CERTIFICATE_HOST') ? { serverName: get('DB_CERTIFICATE_HOST') } : {}) },
     pool: { max: 10, min: 0, idleTimeoutMillis: 30000 }, connectionTimeout: 15000, requestTimeout: 30000 };
   if (!review && (!db.server || !db.database || !db.user || !db.password)) throw new Error('Set DB_SERVER, DB_NAME, DB_USER and DB_PASSWORD in .env.');
   return { envFile: path.resolve(envFile), environment, review, db, port: integer('PORT', 5180), bindAddress,
-    allowedHosts: get('ALLOWED_HOSTS', 'localhost;127.0.0.1').split(';').filter(Boolean), trustLocalProxy: boolean('TRUST_LOCAL_PROXY', false),
+    apps, allowedHosts: [...get('ALLOWED_HOSTS', 'localhost;127.0.0.1').split(';').filter(Boolean), ...Object.values(apps).filter(Boolean).map(url => new URL(url).hostname)], trustLocalProxy: boolean('TRUST_LOCAL_PROXY', false),
     storage: path.resolve(review ? 'review-data/photos' : get('STORAGE_PATH', 'storage')),
     reviewDatabase: path.resolve('review-data/review.db'), webRoot: path.resolve('wwwroot'),
     smtp: { host: get('SMTP_HOST', 'smtp.gmail.com'), port: integer('SMTP_PORT', 465), secure: boolean('SMTP_SECURE', true), user: get('SMTP_USER'), pass: get('SMTP_PASS').replace(/\s/g, ''), from: get('SMTP_FROM', get('SMTP_USER')) },

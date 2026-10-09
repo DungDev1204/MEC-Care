@@ -146,6 +146,35 @@ test('admin APIs reject normal users and return paginated public fields and pers
     assert.equal(activation.status, 200); assert.ok(Date.parse(activation.body.activeUntil) > DateTime.utc().plus({ months: 1 }).toMillis());
   } finally { await f.db.close(); }
 });
+test('admin user status filters combine with search, paginate correctly and reflect access changes', async () => {
+  const f = await fixture(); try {
+    const admin = await f.seed('admin@admin.com', true); const normal = await f.seed('normal@example.test');
+    const past = new Date(Date.now() - 86400000); const future = new Date(Date.now() + 86400000);
+    async function add(username: string, accessGranted: boolean, activeUntil: Date | null, enabled = true) {
+      return f.db.insert('Employees', { id: randomUUID(), email: `${username}@example.test`, username, displayName: username,
+        enabled, accessGranted, activeUntil, passwordHash: normal.passwordHash });
+    }
+    for (let i = 0; i < 50; i++) await add(`filter_active_${i}`, true, i % 2 ? future : null);
+    const pending = await add('filter_pending', false, past);
+    const expired = await add('filter_expired', true, past);
+    await add('filter_locked', false, past, false);
+    const list = (query: string) => request(f.app).get(`/api/admin/users?${query}`).set(auth(admin.token));
+    for (const [status, count] of [['admin', 1], ['active', 51], ['pending', 1], ['expired', 1], ['inactive', 1]] as const) {
+      const result = await list(`status=${status}`); assert.equal(result.status, 200); assert.equal(result.body.total, count);
+      assert.ok(result.body.users.every((u: any) => u.status === status));
+    }
+    const second = await list('status=active&page=2'); assert.equal(second.body.total, 51); assert.equal(second.body.users.length, 1);
+    assert.equal((await list('status=active&search=filter_pending')).body.total, 0);
+    assert.equal((await list('status=pending&search=filter_pending')).body.users[0].id, pending.id);
+    assert.equal((await list(`status=expired&search=${expired.userCode}`)).body.users[0].id, expired.id);
+    assert.equal((await list('status=unknown')).status, 400);
+    await request(f.app).post(`/api/admin/users/${pending.id}/activation`).set(auth(admin.token)).send({ enabled: true, months: 1 }).expect(200);
+    assert.equal((await list('status=pending')).body.total, 0);
+    assert.equal((await list('status=active')).body.total, 52);
+    await request(f.app).post(`/api/admin/users/${normal.id}/activation`).set(auth(admin.token)).send({ enabled: false }).expect(200);
+    assert.equal((await list('status=inactive')).body.total, 2);
+  } finally { await f.db.close(); }
+});
 test('concurrent OTP verification creates exactly one user and consumes the challenge once', async () => {
   const f = await fixture(); try {
     const begin = await signup(f.app); const input = { registrationId: begin.body.registrationId, code: f.mail[0].code };

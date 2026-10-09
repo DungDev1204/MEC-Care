@@ -18,7 +18,7 @@ export function accountRouter(db: Database, config: Config) {
     const session = await db.one('Sessions', 'Id=@id AND EmployeeId=@owner', { id: res.locals.user.sessionId, owner });
     const customers = await db.rows('Customers', 'OwnerId=@owner', { owner });
     const counts = await db.query('SELECT (SELECT COUNT(*) FROM Photos WHERE CustomerId IN (SELECT Id FROM Customers WHERE OwnerId=@owner)) AS Photos, (SELECT COUNT(*) FROM Contacts WHERE CustomerId IN (SELECT Id FROM Customers WHERE OwnerId=@owner)) AS Contacts, (SELECT COUNT(*) FROM Reminders WHERE Active=@active AND CustomerId IN (SELECT Id FROM Customers WHERE OwnerId=@owner)) AS Reminders', { owner, active: true });
-    res.json({ username: employee!.username, email: employee!.email, displayName: employee!.displayName, phone: employee!.phone, expiresAt: session!.expiresAt, timeZone: 'Asia/Ho_Chi_Minh', customers: customers.length, ...counts[0] });
+    res.json({ userCode: employee!.userCode, username: employee!.username, email: employee!.email, displayName: employee!.displayName, phone: employee!.phone, expiresAt: session!.expiresAt, timeZone: 'Asia/Ho_Chi_Minh', customers: customers.length, ...counts[0] });
   });
   router.put('/account', async (req, res) => {
     const data = personalSchema.parse(req.body); await db.update('Employees', data, 'Id=@owner', { owner: res.locals.user.id });

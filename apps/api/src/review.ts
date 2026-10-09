@@ -4,6 +4,7 @@ import { hashPassword } from './auth.js';
 import { searchText } from './validation.js';
 import { addReminder } from './care.js';
 import { DateTime } from 'luxon';
+import { notifyAdmins } from './order-notifications.js';
 
 export async function initializeReview(db: Database) {
   for (let i=1; i<=2; i++) {
@@ -21,4 +22,34 @@ export async function initializeReview(db: Database) {
       }
     });
   }
+  await initializeCommerceReview(db);
+}
+
+async function initializeCommerceReview(db: Database) {
+  await db.transaction(async tx => {
+    for (const [username, name, admin, pending] of [
+      ['review_admin', 'Admin Review', true, false], ['review_buyer', 'Người mua Review', false, true],
+      ['review_new', 'Đăng ký gói Review', false, true], ['review_due', 'Gia hạn hôm nay', false, false]
+    ] as const) {
+      if (!await tx.one('Employees', 'Email=@email', { email: `${username}@clientstudio.local` })) {
+        await tx.insert('Employees', { id: randomUUID(), email: `${username}@clientstudio.local`, username, displayName: name, phone: '', enabled: true,
+          emailVerified: true, isAdmin: admin, accessGranted: !pending, passwordHash: await hashPassword('Review123!'),
+          activeUntil: username === 'review_due' ? DateTime.now().setZone('Asia/Ho_Chi_Minh').endOf('day').toUTC().toISO() : null });
+      }
+    }
+    if (!await tx.one('PaymentSettings', 'Id=@id', { id: 'payment' })) {
+      await tx.insert('PaymentSettings', { id: 'payment', bankCode: '970422', bankName: 'MB — Ngân hàng mẫu', accountNumber: '0000000000',
+        accountName: 'TAI KHOAN MAU KHONG CHUYEN TIEN', monthlyPrice: 200000, zaloUrl: 'https://zalo.me/0000000000' });
+    }
+    if (!await tx.one('PurchaseOrders', 'Code=@code', { code: 'DHREVIEW' })) {
+      const due = (await tx.one('Employees', 'Username=@username', { username: 'review_due' }))!;
+      const settings = (await tx.one('PaymentSettings', 'Id=@id', { id: 'payment' }))!;
+      const reported = new Date(Date.now() - 12 * 60000);
+      const order = await tx.insert('PurchaseOrders', { ...settings, id: randomUUID(), code: 'DHREVIEW', employeeId: due.id, userCode: due.userCode, username: due.username,
+        amount: settings.monthlyPrice, months: 1, createdAt: new Date(Date.now() - 15 * 60000), reportedAt: reported,
+        state: 'pending_review', paymentState: 'reviewing', transferContent: `DHREVIEW ${due.userCode} review due` });
+      await notifyAdmins(tx, order, reported);
+      await tx.insert('AdminAudit', { id: randomUUID(), actorId: due.id, targetId: due.id, action: 'order_report', createdAt: reported, details: JSON.stringify({ orderId: order.id }) });
+    }
+  });
 }
